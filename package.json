@@ -1,0 +1,71 @@
+{
+    "name": "envfill",
+    "version": "1.0.0",
+    "description": "Interactive CLI to populate .env files from templates",
+    "type": "module",
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": {
+                "types": "./dist/index.d.ts",
+                "default": "./dist/index.js"
+            },
+            "require": {
+                "types": "./dist/index.d.cts",
+                "default": "./dist/index.cjs"
+            }
+        }
+    },
+    "bin": {
+        "envfill": "./dist/cli.js"
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch",
+        "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+        "lint": "eslint src test",
+        "typecheck": "tsc --noEmit",
+        "prepublishOnly": "npm run build"
+    },
+    "keywords": [
+        "env",
+        "dotenv",
+        "environment",
+        "template",
+        "cli",
+        "interactive"
+    ],
+    "author": "",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/7PH/envfill.git"
+    },
+    "homepage": "https://github.com/7PH/envfill",
+    "bugs": {
+        "url": "https://github.com/7PH/envfill/issues"
+    },
+    "dependencies": {
+        "@clack/prompts": "^0.11.0",
+        "commander": "^12.0.0"
+    },
+    "devDependencies": {
+        "@types/jest": "^29.5.0",
+        "@types/node": "^20.0.0",
+        "@typescript-eslint/eslint-plugin": "^7.0.0",
+        "@typescript-eslint/parser": "^7.0.0",
+        "eslint": "^8.57.0",
+        "jest": "^29.7.0",
+        "ts-jest": "^29.1.0",
+        "tsup": "^8.5.0",
+        "typescript": "^5.4.0"
+    },
+    "engines": {
+        "node": ">=18"
+    }
+}
