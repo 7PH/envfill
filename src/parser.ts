@@ -1,27 +1,43 @@
-import type { EnvVariable, ParsedTemplate, DefaultValue, DirectiveType } from './types.js';
+import type { EnvVariable, ParsedTemplate, DefaultValue, DirectiveType, ConditionDirective } from './types.js';
 
 const SECTION_HEADER_REGEX = /^#\s*---\s*(.+?)\s*---\s*$/;
 const VARIABLE_REGEX = /^([A-Z_][A-Z0-9_]*)=(.*)$/;
 const SHELL_COMMAND_REGEX = /^`(.+)`$/;
 const SECRET_DIRECTIVE_REGEX = /^<secret:(\d+)>$/;
 const OPTIONS_DIRECTIVE_REGEX = /^<([^<>]+\|[^<>]+)>$/;
-const SIMPLE_DIRECTIVE_REGEX = /^<([a-z,]+)>$/;
+const DIRECTIVE_REGEX = /^<([a-z,:A-Z0-9_]+)>$/;
+const IF_DIRECTIVE_REGEX = /^if:([A-Z_][A-Z0-9_]*)$/;
 
 const VALID_DIRECTIVES: DirectiveType[] = ['required', 'url', 'email', 'port', 'number', 'boolean'];
 
-function parseDirectiveString(directiveStr: string): DirectiveType[] {
+interface ParsedDirectives {
+    directives: DirectiveType[];
+    condition?: ConditionDirective;
+}
+
+function parseDirectiveString(directiveStr: string): ParsedDirectives {
     const parts = directiveStr.split(',').map(p => p.trim());
     const directives: DirectiveType[] = [];
+    let condition: ConditionDirective | undefined;
 
     for (const part of parts) {
-        if (VALID_DIRECTIVES.includes(part as DirectiveType)) {
+        const ifMatch = IF_DIRECTIVE_REGEX.exec(part);
+        if (ifMatch?.[1]) {
+            if (condition) {
+                throw new Error('Multiple if conditions not allowed');
+            }
+            condition = { variable: ifMatch[1] };
+        } else if (VALID_DIRECTIVES.includes(part as DirectiveType)) {
             directives.push(part as DirectiveType);
         } else {
             throw new Error(`Unknown directive: ${part}`);
         }
     }
 
-    return directives;
+    if (condition) {
+        return { directives, condition };
+    }
+    return { directives };
 }
 
 function parseOptions(optionsStr: string): { choices: string[]; defaultChoice: string | undefined } {
@@ -42,7 +58,13 @@ function parseOptions(optionsStr: string): { choices: string[]; defaultChoice: s
     return { choices, defaultChoice };
 }
 
-function parseValue(value: string): { default?: DefaultValue; directives: DirectiveType[] } {
+interface ParsedValue {
+    default?: DefaultValue;
+    directives: DirectiveType[];
+    condition?: ConditionDirective;
+}
+
+function parseValue(value: string): ParsedValue {
     const trimmedValue = value.trim();
 
     if (trimmedValue === '') {
@@ -80,10 +102,13 @@ function parseValue(value: string): { default?: DefaultValue; directives: Direct
         };
     }
 
-    const simpleDirectiveMatch = SIMPLE_DIRECTIVE_REGEX.exec(trimmedValue);
-    if (simpleDirectiveMatch?.[1]) {
-        const directives = parseDirectiveString(simpleDirectiveMatch[1]);
-        return { directives };
+    const directiveMatch = DIRECTIVE_REGEX.exec(trimmedValue);
+    if (directiveMatch?.[1]) {
+        const parsed = parseDirectiveString(directiveMatch[1]);
+        if (parsed.condition) {
+            return { directives: parsed.directives, condition: parsed.condition };
+        }
+        return { directives: parsed.directives };
     }
 
     return {
@@ -132,7 +157,7 @@ export function parseTemplate(content: string): ParsedTemplate {
         if (variableMatch?.[1] !== undefined && variableMatch[2] !== undefined) {
             const name = variableMatch[1];
             const rawValue = variableMatch[2];
-            const { default: defaultValue, directives } = parseValue(rawValue);
+            const { default: defaultValue, directives, condition } = parseValue(rawValue);
 
             const variable: EnvVariable = {
                 name,
@@ -146,6 +171,10 @@ export function parseTemplate(content: string): ParsedTemplate {
 
             if (defaultValue) {
                 variable.default = defaultValue;
+            }
+
+            if (condition) {
+                variable.condition = condition;
             }
 
             if (currentSection) {
@@ -162,6 +191,7 @@ export function parseTemplate(content: string): ParsedTemplate {
 
 export function validateTemplate(template: ParsedTemplate): string[] {
     const errors: string[] = [];
+    const definedVariables = new Map<string, EnvVariable>();
 
     for (const variable of template.variables) {
         if (variable.directives.includes('boolean') && variable.directives.length > 1) {
@@ -196,6 +226,21 @@ export function validateTemplate(template: ParsedTemplate): string[] {
                 `Line ${variable.lineNumber}: ${variable.name} - secret cannot be combined with directives`
             );
         }
+
+        if (variable.condition) {
+            const conditionVar = definedVariables.get(variable.condition.variable);
+            if (!conditionVar) {
+                errors.push(
+                    `Line ${variable.lineNumber}: ${variable.name} - condition variable '${variable.condition.variable}' must be defined before this variable`
+                );
+            } else if (!conditionVar.directives.includes('boolean')) {
+                errors.push(
+                    `Line ${variable.lineNumber}: ${variable.name} - condition variable '${variable.condition.variable}' should have <boolean> directive`
+                );
+            }
+        }
+
+        definedVariables.set(variable.name, variable);
     }
 
     return errors;

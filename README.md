@@ -30,20 +30,36 @@ Run `npx envfill` and get prompted for each value.
 
 ## Template Syntax
 
-| Value | Behavior |
-|-------|----------|
-| `PORT=3000` | Default value |
-| `KEY=` | Prompt (no default) |
-| `` UID=`id -u` `` | Shell command as default |
-| `SECRET=<secret:32>` | Auto-generate |
-| `ENV=<a\|b\|*c>` | Options (`*` = default) |
-| `URL=<required>` | Must provide |
-| `URL=<url>` | URL validation |
-| `EMAIL=<email>` | Email validation |
-| `PORT=<port>` | Port validation |
-| `DEBUG=<boolean>` | Yes/no toggle |
+| Value                | Behavior                     |
+| -------------------- | ---------------------------- |
+| `PORT=3000`          | Default value                |
+| `KEY=`               | Prompt (no default)          |
+| `` UID=`id -u` ``    | Shell command as default     |
+| `SECRET=<secret:32>` | Auto-generate                |
+| `ENV=<a\|b\|*c>`     | Options (`*` = default)      |
+| `URL=<required>`     | Must provide                 |
+| `URL=<url>`          | URL validation               |
+| `EMAIL=<email>`      | Email validation             |
+| `PORT=<port>`        | Port validation              |
+| `DEBUG=<boolean>`    | Yes/no toggle                |
+| `KEY=<if:VAR>`       | Only prompt if VAR is truthy |
 
-Combine with comma: `<required,url>`
+Combine with comma: `<required,url>` or `<if:ENABLED,required>`
+
+## Fetching Secrets
+
+Use shell commands to fetch secrets from any secret manager:
+
+```bash
+# HashiCorp Vault
+DB_PASSWORD=`vault kv get -field=db_password secret/data/myapp`
+
+# 1Password CLI
+API_KEY=`op read "op://Vault/API Key/password"`
+
+# AWS Secrets Manager
+SECRET=`aws secretsmanager get-secret-value --secret-id myapp --query SecretString --output text`
+```
 
 ## CLI Options
 
