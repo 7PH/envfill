@@ -1,7 +1,7 @@
 import * as p from '@clack/prompts';
 import type { EnvVariable, ResolvedVariable, PrompterStats, PrompterResult } from './types.js';
 import { resolveDefault } from './resolver.js';
-import { createValidator } from './validator.js';
+import { createValidator, normalizeBoolean } from './validator.js';
 
 export interface PrompterOptions {
     useDefaults: boolean;
@@ -21,12 +21,25 @@ function createResolvedVariable(name: string, value: string, section: string | u
     return { name, value };
 }
 
+function evaluateCondition(
+    condition: { variable: string },
+    resolvedValues: Map<string, string>
+): boolean {
+    const conditionValue = resolvedValues.get(condition.variable);
+    if (conditionValue === undefined) {
+        return true;
+    }
+    const normalized = normalizeBoolean(conditionValue);
+    return normalized === true;
+}
+
 export async function promptForVariables(
     variables: EnvVariable[],
     options: PrompterOptions
 ): Promise<PrompterResult | null> {
     const results: ResolvedVariable[] = [];
-    const stats: PrompterStats = { prompted: 0, defaults: 0, kept: 0, generated: 0 };
+    const resolvedValues = new Map<string, string>();
+    const stats: PrompterStats = { prompted: 0, defaults: 0, kept: 0, generated: 0, skipped: 0 };
     let currentSection: string | undefined;
 
     for (const variable of variables) {
@@ -34,9 +47,17 @@ export async function promptForVariables(
             const existingValue = options.existingValues.get(variable.name);
             if (existingValue !== undefined) {
                 results.push(createResolvedVariable(variable.name, existingValue, variable.section));
+                resolvedValues.set(variable.name, existingValue);
                 stats.kept++;
                 continue;
             }
+        }
+
+        if (variable.condition && !evaluateCondition(variable.condition, resolvedValues)) {
+            results.push(createResolvedVariable(variable.name, '', variable.section));
+            resolvedValues.set(variable.name, '');
+            stats.skipped++;
+            continue;
         }
 
         if (variable.section && variable.section !== currentSection) {
@@ -54,6 +75,7 @@ export async function promptForVariables(
                 p.log.info(`${description}: Generated ${variable.default.length}-char secret`);
             }
             results.push(createResolvedVariable(variable.name, resolved.value, variable.section));
+            resolvedValues.set(variable.name, resolved.value);
             stats.generated++;
             continue;
         }
@@ -64,6 +86,7 @@ export async function promptForVariables(
                 return null;
             }
             results.push(createResolvedVariable(variable.name, resolved.value, variable.section));
+            resolvedValues.set(variable.name, resolved.value);
             stats.defaults++;
             continue;
         }
@@ -76,6 +99,7 @@ export async function promptForVariables(
         }
 
         results.push(createResolvedVariable(variable.name, value, variable.section));
+        resolvedValues.set(variable.name, value);
         stats.prompted++;
     }
 

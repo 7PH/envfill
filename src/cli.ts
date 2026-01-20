@@ -96,6 +96,7 @@ program
                     if (stats.kept > 0) parts.push(`${stats.kept} kept`);
                     if (stats.defaults > 0) parts.push(`${stats.defaults} defaults`);
                     if (stats.generated > 0) parts.push(`${stats.generated} generated`);
+                    if (stats.skipped > 0) parts.push(`${stats.skipped} skipped`);
                     if (extraVariables.length > 0) parts.push(`${extraVariables.length} extra`);
                     const summary = parts.length > 0 ? ` (${parts.join(', ')})` : '';
                     p.outro(`Wrote ${result.variables.length + extraVariables.length} variables to ${options.output}${summary}`);

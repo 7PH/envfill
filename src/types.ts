@@ -23,11 +23,16 @@ export interface StaticDefault {
 
 export type DefaultValue = ShellDefault | StaticDefault | SecretDirective | OptionsDirective;
 
+export interface ConditionDirective {
+    variable: string;
+}
+
 export interface EnvVariable {
     name: string;
     description?: string;
     default?: DefaultValue;
     directives: DirectiveType[];
+    condition?: ConditionDirective;
     section?: string;
     lineNumber: number;
 }
@@ -57,6 +62,7 @@ export interface PrompterStats {
     defaults: number;
     kept: number;
     generated: number;
+    skipped: number;
 }
 
 export interface PrompterResult {

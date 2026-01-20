@@ -140,6 +140,30 @@ describe('parseTemplate', () => {
             const result = parseTemplate('EMAIL=<required,email>');
             expect(result.variables[0]?.directives).toEqual(['required', 'email']);
         });
+
+        it('parses if condition directive', () => {
+            const result = parseTemplate('STRIPE_API_KEY=<if:STRIPE_ENABLED>');
+            expect(result.variables[0]?.condition).toEqual({ variable: 'STRIPE_ENABLED' });
+            expect(result.variables[0]?.directives).toEqual([]);
+        });
+
+        it('parses if condition combined with required directive', () => {
+            const result = parseTemplate('STRIPE_API_KEY=<if:STRIPE_ENABLED,required>');
+            expect(result.variables[0]?.condition).toEqual({ variable: 'STRIPE_ENABLED' });
+            expect(result.variables[0]?.directives).toEqual(['required']);
+        });
+
+        it('parses if condition combined with multiple directives', () => {
+            const result = parseTemplate('WEBHOOK_URL=<if:WEBHOOKS_ENABLED,required,url>');
+            expect(result.variables[0]?.condition).toEqual({ variable: 'WEBHOOKS_ENABLED' });
+            expect(result.variables[0]?.directives).toEqual(['required', 'url']);
+        });
+
+        it('parses if condition with directives in any order', () => {
+            const result = parseTemplate('URL=<required,if:FEATURE_ON,url>');
+            expect(result.variables[0]?.condition).toEqual({ variable: 'FEATURE_ON' });
+            expect(result.variables[0]?.directives).toEqual(['required', 'url']);
+        });
     });
 
     describe('section parsing', () => {
@@ -328,5 +352,25 @@ describe('validateTemplate', () => {
         const errors = validateTemplate(template);
         expect(errors).toHaveLength(1);
         expect(errors[0]).toContain('secret cannot be combined with directives');
+    });
+
+    it('rejects condition variable not defined before conditional variable', () => {
+        const template = parseTemplate('STRIPE_API_KEY=<if:STRIPE_ENABLED>\nSTRIPE_ENABLED=<boolean>');
+        const errors = validateTemplate(template);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain('must be defined before');
+    });
+
+    it('warns if condition variable is not boolean', () => {
+        const template = parseTemplate('STRIPE_ENABLED=production\nSTRIPE_API_KEY=<if:STRIPE_ENABLED>');
+        const errors = validateTemplate(template);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain('should have <boolean> directive');
+    });
+
+    it('allows valid conditional variable', () => {
+        const template = parseTemplate('STRIPE_ENABLED=<boolean>\nSTRIPE_API_KEY=<if:STRIPE_ENABLED,required>');
+        const errors = validateTemplate(template);
+        expect(errors).toHaveLength(0);
     });
 });
