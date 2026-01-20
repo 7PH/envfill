@@ -3,14 +3,14 @@ import { Command } from 'commander';
 import { existsSync, readFileSync } from 'node:fs';
 import { parseTemplate, validateTemplate } from './parser.js';
 import { promptForVariables } from './prompter.js';
-import { generateEnvContent, readExistingEnv, writeEnvFile } from './writer.js';
+import { generateEnvContentFromTemplate, readExistingEnv, writeEnvFile } from './writer.js';
 
 const program = new Command();
 
 program
     .name('envfill')
     .description('Interactive CLI to populate .env files from templates')
-    .version('1.0.0')
+    .version('1.1.0')
     .option('-i, --input <file>', 'Template file to read', '.env.template')
     .option('-o, --output <file>', 'Output file to write', '.env')
     .option('--defaults', 'Use all default values without prompting', false)
@@ -66,7 +66,7 @@ program
             }
 
             const stats = result.stats;
-            let content = generateEnvContent(result.variables);
+            let content = generateEnvContentFromTemplate(templateContent, result.variables);
 
             // Find and append extraneous variables (in existing .env but not in template)
             const templateNames = new Set(template.variables.map(v => v.name));
