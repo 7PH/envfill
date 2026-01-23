@@ -7,6 +7,10 @@ export type {
     DefaultValue,
     ConditionDirective,
     RegexDirective,
+    ReplaceTransform,
+    TrimTransform,
+    SimpleTransform,
+    Transform,
     EnvVariable,
     ParsedTemplate,
     ResolvedVariable,
@@ -33,3 +37,4 @@ export {
 export { prompt } from './prompter.js';
 export type { PrompterOptions } from './prompter.js';
 export { generate, read, write } from './writer.js';
+export { applyTransforms } from './transformer.js';

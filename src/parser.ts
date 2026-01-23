@@ -1,4 +1,4 @@
-import type { EnvVariable, ParsedTemplate, DefaultValue, DirectiveType, ConditionDirective, RegexDirective } from './types.js';
+import type { EnvVariable, ParsedTemplate, DefaultValue, DirectiveType, ConditionDirective, RegexDirective, Transform } from './types.js';
 
 const SECTION_HEADER_REGEX = /^#\s*---\s*(.+?)\s*---\s*$/;
 const VARIABLE_REGEX = /^([A-Z_][A-Z0-9_]*)=(.*)$/;
@@ -10,11 +10,14 @@ const IF_DIRECTIVE_REGEX = /^if:([A-Z_][A-Z0-9_]*)$/;
 
 const VALID_DIRECTIVES: DirectiveType[] = ['required', 'url', 'email', 'port', 'number', 'boolean'];
 const VALID_REGEX_FLAGS = ['i', 'm', 'u', 's'];
+const VALID_REPLACE_FLAGS = ['g', 'i'];
+const SIMPLE_TRANSFORMS = ['lowercase', 'uppercase', 'slugify'] as const;
 
 interface ParsedDirectives {
     directives: DirectiveType[];
     condition?: ConditionDirective;
     regex?: RegexDirective;
+    transforms?: Transform[];
 }
 
 function findClosingSlash(str: string): number {
@@ -60,63 +63,155 @@ function parseRegexDirective(regexStr: string): RegexDirective {
     return errorMessage !== undefined ? { pattern, flags, errorMessage } : { pattern, flags };
 }
 
-function extractRegexPart(directiveStr: string): { regex: RegexDirective | undefined; remaining: string } {
-    const regexStart = directiveStr.indexOf('regex:/');
-    if (regexStart === -1) {
-        return { regex: undefined, remaining: directiveStr };
+function parseReplaceTransform(replaceStr: string): Transform {
+    // Format: replace:/pattern/replacement/flags
+    if (!replaceStr.startsWith('replace:/')) {
+        throw new Error('Invalid replace directive format');
     }
 
-    const afterRegex = directiveStr.slice(regexStart + 7);
-    const patternEnd = findClosingSlash(afterRegex);
+    const afterPrefix = replaceStr.slice(9); // after "replace:/"
+    const patternEnd = findClosingSlash(afterPrefix);
 
     if (patternEnd === -1) {
-        throw new Error('Invalid regex directive: missing closing /');
+        throw new Error('Invalid replace directive: missing closing / after pattern');
     }
 
-    const afterSlash = afterRegex.slice(patternEnd + 1);
-    const colonIdx = afterSlash.indexOf(':');
+    const pattern = afterPrefix.slice(0, patternEnd).replace(/\\\//g, '/');
+    const afterPattern = afterPrefix.slice(patternEnd + 1);
 
-    let regexEndOffset: number;
-    if (colonIdx !== -1) {
-        const commaAfterMsg = afterSlash.indexOf(',', colonIdx + 1);
-        regexEndOffset = commaAfterMsg !== -1 ? commaAfterMsg : afterSlash.length;
-    } else {
-        const commaIdx = afterSlash.indexOf(',');
-        regexEndOffset = commaIdx !== -1 ? commaIdx : afterSlash.length;
+    const replacementEnd = findClosingSlash(afterPattern);
+
+    if (replacementEnd === -1) {
+        throw new Error('Invalid replace directive: missing closing / after replacement');
     }
 
-    const regexEndPos = regexStart + 7 + patternEnd + 1 + regexEndOffset;
-    const regex = parseRegexDirective(directiveStr.slice(regexStart, regexEndPos));
+    const replacement = afterPattern.slice(0, replacementEnd).replace(/\\\//g, '/');
+    const flags = afterPattern.slice(replacementEnd + 1);
 
-    const before = directiveStr.slice(0, regexStart);
-    const after = directiveStr.slice(regexEndPos);
-    const remaining = (before + after).replace(/^,+|,+$/g, '').replace(/,{2,}/g, ',');
+    for (const flag of flags) {
+        if (!VALID_REPLACE_FLAGS.includes(flag)) {
+            throw new Error(`Invalid replace flag: ${flag}`);
+        }
+    }
 
-    return { regex, remaining };
+    try {
+        new RegExp(pattern, flags);
+    } catch (e) {
+        throw new Error(`Invalid replace pattern: ${(e as Error).message}`);
+    }
+
+    return { type: 'replace', pattern, replacement, flags };
+}
+
+function parseTrimTransform(trimStr: string): Transform {
+    // Format: trim:chars
+    if (!trimStr.startsWith('trim:')) {
+        throw new Error('Invalid trim directive format');
+    }
+
+    const chars = trimStr.slice(5);
+    if (chars === '') {
+        throw new Error('Trim directive requires characters to trim');
+    }
+
+    return { type: 'trim', chars };
 }
 
 function parseDirectiveString(directiveStr: string): ParsedDirectives {
-    // First extract regex if present (since it can contain commas)
-    const { regex, remaining } = extractRegexPart(directiveStr);
-
+    const transforms: Transform[] = [];
     const directives: DirectiveType[] = [];
     let condition: ConditionDirective | undefined;
+    let regex: RegexDirective | undefined;
 
-    if (remaining.trim() !== '') {
-        const parts = remaining.split(',').map(p => p.trim()).filter(p => p !== '');
+    // Parse directives sequentially to preserve transform order
+    let i = 0;
+    while (i < directiveStr.length) {
+        // Skip leading commas and whitespace
+        while (i < directiveStr.length && (directiveStr[i] === ',' || directiveStr[i] === ' ')) {
+            i++;
+        }
+        if (i >= directiveStr.length) break;
 
-        for (const part of parts) {
-            const ifMatch = IF_DIRECTIVE_REGEX.exec(part);
-            if (ifMatch?.[1]) {
-                if (condition) {
-                    throw new Error('Multiple if conditions not allowed');
-                }
-                condition = { variable: ifMatch[1] };
-            } else if (VALID_DIRECTIVES.includes(part as DirectiveType)) {
-                directives.push(part as DirectiveType);
-            } else {
-                throw new Error(`Unknown directive: ${part}`);
+        // Check for replace:/.../.../flags
+        if (directiveStr.slice(i).startsWith('replace:/')) {
+            const startPos = i;
+            i += 9; // skip "replace:/"
+
+            // Find end of pattern
+            const patternEnd = findClosingSlash(directiveStr.slice(i));
+            if (patternEnd === -1) {
+                throw new Error('Invalid replace directive: missing closing / after pattern');
             }
+            i += patternEnd + 1; // skip pattern and closing /
+
+            // Find end of replacement
+            const replacementEnd = findClosingSlash(directiveStr.slice(i));
+            if (replacementEnd === -1) {
+                throw new Error('Invalid replace directive: missing closing / after replacement');
+            }
+            i += replacementEnd + 1; // skip replacement and closing /
+
+            // Read flags until comma or end
+            while (i < directiveStr.length && directiveStr[i] !== ',') {
+                i++;
+            }
+
+            transforms.push(parseReplaceTransform(directiveStr.slice(startPos, i)));
+            continue;
+        }
+
+        // Check for regex:/pattern/flags:error
+        if (directiveStr.slice(i).startsWith('regex:/')) {
+            const startPos = i;
+            i += 7; // skip "regex:/"
+
+            // Find end of pattern
+            const patternEnd = findClosingSlash(directiveStr.slice(i));
+            if (patternEnd === -1) {
+                throw new Error('Invalid regex directive: missing closing /');
+            }
+            i += patternEnd + 1; // skip pattern and closing /
+
+            // Read flags and optional error message
+            const colonIdx = directiveStr.indexOf(':', i);
+            const commaIdx = directiveStr.indexOf(',', i);
+
+            if (colonIdx !== -1 && (commaIdx === -1 || colonIdx < commaIdx)) {
+                // Has error message, find the next comma after the error message
+                const commaAfterMsg = directiveStr.indexOf(',', colonIdx + 1);
+                i = commaAfterMsg !== -1 ? commaAfterMsg : directiveStr.length;
+            } else {
+                // No error message, just flags
+                i = commaIdx !== -1 ? commaIdx : directiveStr.length;
+            }
+
+            regex = parseRegexDirective(directiveStr.slice(startPos, i));
+            continue;
+        }
+
+        // Find end of current part (next comma)
+        const commaIdx = directiveStr.indexOf(',', i);
+        const partEnd = commaIdx !== -1 ? commaIdx : directiveStr.length;
+        const part = directiveStr.slice(i, partEnd).trim();
+        i = partEnd;
+
+        if (part === '') continue;
+
+        // Match different directive types
+        const ifMatch = IF_DIRECTIVE_REGEX.exec(part);
+        if (ifMatch?.[1]) {
+            if (condition) {
+                throw new Error('Multiple if conditions not allowed');
+            }
+            condition = { variable: ifMatch[1] };
+        } else if (VALID_DIRECTIVES.includes(part as DirectiveType)) {
+            directives.push(part as DirectiveType);
+        } else if (SIMPLE_TRANSFORMS.includes(part as typeof SIMPLE_TRANSFORMS[number])) {
+            transforms.push({ type: part as 'lowercase' | 'uppercase' | 'slugify' });
+        } else if (part.startsWith('trim:')) {
+            transforms.push(parseTrimTransform(part));
+        } else {
+            throw new Error(`Unknown directive: ${part}`);
         }
     }
 
@@ -126,6 +221,9 @@ function parseDirectiveString(directiveStr: string): ParsedDirectives {
     }
     if (regex) {
         result.regex = regex;
+    }
+    if (transforms.length > 0) {
+        result.transforms = transforms;
     }
     return result;
 }
@@ -153,6 +251,7 @@ interface ParsedValue {
     directives: DirectiveType[];
     condition?: ConditionDirective;
     regex?: RegexDirective;
+    transforms?: Transform[];
 }
 
 function parseValue(value: string): ParsedValue {
@@ -202,6 +301,9 @@ function parseValue(value: string): ParsedValue {
         }
         if (parsed.regex) {
             result.regex = parsed.regex;
+        }
+        if (parsed.transforms) {
+            result.transforms = parsed.transforms;
         }
         return result;
     }
@@ -257,7 +359,7 @@ export function parse(content: string): ParsedTemplate {
         if (variableMatch?.[1] !== undefined && variableMatch[2] !== undefined) {
             const name = variableMatch[1];
             const rawValue = variableMatch[2];
-            const { default: defaultValue, directives, condition, regex } = parseValue(rawValue);
+            const { default: defaultValue, directives, condition, regex, transforms } = parseValue(rawValue);
 
             const variable: EnvVariable = {
                 name,
@@ -279,6 +381,10 @@ export function parse(content: string): ParsedTemplate {
 
             if (regex) {
                 variable.regex = regex;
+            }
+
+            if (transforms) {
+                variable.transforms = transforms;
             }
 
             if (currentSection) {

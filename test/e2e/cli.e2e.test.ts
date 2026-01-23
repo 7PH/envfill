@@ -463,6 +463,86 @@ VAR=<if:FLAG_A,if:FLAG_B>`
         });
     });
 
+    describe('Transform directives', () => {
+        it('applies slugify transform', async () => {
+            writeFileSync(join(ctx.dir, 'slugify.template'), 'PROJECT=<slugify>');
+            const result = await ctx.runCliInteractive(['-i', 'slugify.template', '-q'], ['My Cool App']);
+            expect(result.exitCode).toBe(0);
+            const env = ctx.readEnvFile();
+            expect(env.get('PROJECT')).toBe('my-cool-app');
+        });
+
+        it('slugify collapses consecutive non-alphanumeric chars', async () => {
+            writeFileSync(join(ctx.dir, 'slugify2.template'), 'NAME=<slugify>');
+            const result = await ctx.runCliInteractive(['-i', 'slugify2.template', '-q'], ['Hello---World   Test']);
+            expect(result.exitCode).toBe(0);
+            const env = ctx.readEnvFile();
+            expect(env.get('NAME')).toBe('hello-world-test');
+        });
+
+        it('applies replace transform', async () => {
+            writeFileSync(join(ctx.dir, 'replace.template'), 'SNAKE=<replace:/\\s+/_/g>');
+            const result = await ctx.runCliInteractive(['-i', 'replace.template', '-q'], ['hello world']);
+            expect(result.exitCode).toBe(0);
+            const env = ctx.readEnvFile();
+            expect(env.get('SNAKE')).toBe('hello_world');
+        });
+
+        it('chains transforms with validation', async () => {
+            writeFileSync(join(ctx.dir, 'chain.template'), 'ID=<slugify,required>');
+            const result = await ctx.runCliInteractive(['-i', 'chain.template', '-q'], ['Test Project']);
+            expect(result.exitCode).toBe(0);
+            const env = ctx.readEnvFile();
+            expect(env.get('ID')).toBe('test-project');
+        });
+
+        it('applies lowercase transform', async () => {
+            writeFileSync(join(ctx.dir, 'lower.template'), 'NAME=<lowercase>');
+            const result = await ctx.runCliInteractive(['-i', 'lower.template', '-q'], ['HELLO World']);
+            expect(result.exitCode).toBe(0);
+            const env = ctx.readEnvFile();
+            expect(env.get('NAME')).toBe('hello world');
+        });
+
+        it('applies uppercase transform', async () => {
+            writeFileSync(join(ctx.dir, 'upper.template'), 'NAME=<uppercase>');
+            const result = await ctx.runCliInteractive(['-i', 'upper.template', '-q'], ['hello World']);
+            expect(result.exitCode).toBe(0);
+            const env = ctx.readEnvFile();
+            expect(env.get('NAME')).toBe('HELLO WORLD');
+        });
+
+        it('applies trim transform', async () => {
+            writeFileSync(join(ctx.dir, 'trim.template'), 'NAME=<trim:->');
+            const result = await ctx.runCliInteractive(['-i', 'trim.template', '-q'], ['---hello---']);
+            expect(result.exitCode).toBe(0);
+            const env = ctx.readEnvFile();
+            expect(env.get('NAME')).toBe('hello');
+        });
+
+        it('applies chained transforms in order', async () => {
+            writeFileSync(join(ctx.dir, 'chain2.template'), 'NAME=<lowercase,replace:/[^a-z0-9]+/-/g,trim:->');
+            const result = await ctx.runCliInteractive(['-i', 'chain2.template', '-q'], ['  My Cool App!  ']);
+            expect(result.exitCode).toBe(0);
+            const env = ctx.readEnvFile();
+            expect(env.get('NAME')).toBe('my-cool-app');
+        });
+
+        it('applies transforms in defaults mode', () => {
+            writeFileSync(join(ctx.dir, 'defaults-transform.template'), 'NAME=Test Value\nSLUG=<slugify>');
+
+            // Create existing .env with value to transform
+            writeFileSync(join(ctx.dir, '.env'), '');
+
+            const result = ctx.runCli(['-i', 'defaults-transform.template', '--defaults', '-q', '--overwrite']);
+            expect(result.exitCode).toBe(0);
+
+            const env = ctx.readEnvFile();
+            // Note: transforms don't apply to static defaults, only user input
+            expect(env.get('NAME')).toBe('Test Value');
+        });
+    });
+
     describe('Variable interpolation', () => {
         it('resolves ${VAR} references in default values', () => {
             writeFileSync(

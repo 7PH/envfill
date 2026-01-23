@@ -33,24 +33,55 @@ Run `npx envfill` and get prompted for each value.
 
 ## Template Syntax
 
-| Value                | Behavior                     |
-| -------------------- | ---------------------------- |
-| `PORT=3000`          | Default value                |
-| `KEY=`               | Prompt (no default)          |
-| `` UID=`id -u` ``    | Shell command as default     |
-| `SECRET=<secret:32>` | Auto-generate                |
-| `ENV=<a\|b\|*c>`     | Options (`*` = default)      |
-| `URL=<required>`     | Must provide                 |
-| `URL=<url>`          | URL validation               |
-| `EMAIL=<email>`      | Email validation             |
-| `PORT=<port>`        | Port validation              |
-| `DEBUG=<boolean>`    | Yes/no toggle                |
-| `KEY=<if:VAR>`       | Only prompt if VAR is truthy |
-| `B=${A}_suffix`      | Variable interpolation       |
-| `KEY=<regex:/^pattern$/>`| Custom regex validation  |
-| `KEY=<regex:/^pattern$/i:error>`| Regex with flags and custom error |
+| Value                            | Behavior                          |
+| -------------------------------- | --------------------------------- |
+| `PORT=3000`                      | Default value                     |
+| `KEY=`                           | Prompt (no default)               |
+| `` UID=`id -u` ``                | Shell command as default          |
+| `SECRET=<secret:32>`             | Auto-generate                     |
+| `ENV=<a\|b\|*c>`                 | Options (`*` = default)           |
+| `URL=<required>`                 | Must provide                      |
+| `URL=<url>`                      | URL validation                    |
+| `EMAIL=<email>`                  | Email validation                  |
+| `PORT=<port>`                    | Port validation                   |
+| `DEBUG=<boolean>`                | Yes/no toggle                     |
+| `KEY=<if:VAR>`                   | Only prompt if VAR is truthy      |
+| `B=${A}_suffix`                  | Variable interpolation            |
+| `KEY=<regex:/^pattern$/>`        | Custom regex validation           |
+| `KEY=<regex:/^pattern$/i:error>` | Regex with flags and custom error |
+| `NAME=<lowercase>`               | Transform to lowercase            |
+| `NAME=<uppercase>`               | Transform to uppercase            |
+| `SLUG=<slugify>`                 | Slugify (lowercase + dashes)      |
+| `NAME=<trim:->`                  | Trim chars from edges             |
+| `NAME=<replace:/pat/repl/g>`     | Regex replace                     |
 
 Combine with comma: `<required,url>` or `<if:ENABLED,required>`
+
+### Transform Directives
+
+Transforms modify user input before storing. They apply left-to-right:
+
+```bash
+# Slugify: "My Cool App" → "my-cool-app"
+PROJECT_SLUG=<slugify>
+
+# Chain transforms: "  My App!  " → "my-app"
+NAME=<lowercase,replace:/[^a-z0-9]+/-/g,trim:->
+
+# Replace with regex: "hello world" → "hello_world"
+SNAKE_CASE=<replace:/\s+/_/g>
+
+# Combine with validation
+PROJECT_ID=<slugify,required>
+```
+
+| Transform                   | Effect                                                | Example                           |
+| --------------------------- | ----------------------------------------------------- | --------------------------------- |
+| `<lowercase>`               | Convert to lowercase                                  | "Hello" → "hello"                 |
+| `<uppercase>`               | Convert to uppercase                                  | "Hello" → "HELLO"                 |
+| `<slugify>`                 | Lowercase + replace non-alnum with dash + trim dashes | "My App" → "my-app"               |
+| `<trim:chars>`              | Remove chars from start/end                           | `<trim:->` on "-hello-" → "hello" |
+| `<replace:/pat/repl/flags>` | Regex replace (`g`=global, `i`=case-insensitive)      | See above                         |
 
 ## Fetching Secrets
 
