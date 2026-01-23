@@ -12,7 +12,7 @@ GID=`id -g`
 SECRET_KEY=<secret:32>
 
 # API token
-API_TOKEN=<secret:16>
+API_TOKEN=<secret:16:hex>
 
 # --- Settings ---
 

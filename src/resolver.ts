@@ -5,6 +5,36 @@ import type { DefaultValue, ResolveResult } from './types.js';
 /** Pattern for ${VAR} variable interpolation references */
 export const INTERPOLATION_PATTERN = /\$\{([A-Z_][A-Z0-9_]*)\}/g;
 
+/** Charset presets for secret generation */
+const CHARSET_PRESETS: Record<string, string> = {
+    alnum: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
+    alpha: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+    lower: 'abcdefghijklmnopqrstuvwxyz',
+    upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    num: '0123456789',
+    hex: '0123456789abcdef',
+    HEX: '0123456789ABCDEF',
+    special: '!@#$%^&*()-_=+',
+};
+
+function expandCharset(charsetStr: string | undefined): string {
+    if (!charsetStr) return CHARSET_PRESETS['alnum']!;
+
+    const parts = charsetStr.split('+');
+    let result = '';
+
+    for (const part of parts) {
+        const preset = CHARSET_PRESETS[part];
+        if (!preset) {
+            throw new Error(`Unknown charset preset: ${part}`);
+        }
+        result += preset;
+    }
+
+    // Remove duplicates while preserving order
+    return [...new Set(result)].join('');
+}
+
 export function executeShellCommand(command: string): ResolveResult {
     try {
         const output = execSync(command, {
@@ -19,15 +49,15 @@ export function executeShellCommand(command: string): ResolveResult {
     }
 }
 
-export function generateSecret(length: number): string {
-    const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+export function generateSecret(length: number, charset?: string): string {
+    const chars = expandCharset(charset);
     const bytes = randomBytes(length);
     let result = '';
 
     for (let i = 0; i < length; i++) {
         const byte = bytes[i];
         if (byte !== undefined) {
-            result += charset[byte % charset.length];
+            result += chars[byte % chars.length];
         }
     }
 
@@ -51,7 +81,7 @@ export function resolve(defaultValue: DefaultValue | undefined): ResolveResult {
         return executeShellCommand(defaultValue.command);
 
     case 'secret':
-        return { value: generateSecret(defaultValue.length) };
+        return { value: generateSecret(defaultValue.length, defaultValue.charset) };
 
     case 'options':
         return { value: defaultValue.defaultChoice ?? defaultValue.choices[0] ?? '' };

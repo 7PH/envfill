@@ -1,9 +1,9 @@
-import type { EnvVariable, ParsedTemplate, DefaultValue, DirectiveType, ConditionDirective, RegexDirective, Transform } from './types.js';
+import type { EnvVariable, ParsedTemplate, DefaultValue, DirectiveType, ConditionDirective, RegexDirective, Transform, SecretDirective } from './types.js';
 
 const SECTION_HEADER_REGEX = /^#\s*---\s*(.+?)\s*---\s*$/;
 const VARIABLE_REGEX = /^([A-Z_][A-Z0-9_]*)=(.*)$/;
 const SHELL_COMMAND_REGEX = /^`(.+)`$/;
-const SECRET_DIRECTIVE_REGEX = /^<secret:(\d+)>$/;
+const SECRET_DIRECTIVE_REGEX = /^<secret:(\d+)(?::([^>]+))?>$/;
 const OPTIONS_DIRECTIVE_REGEX = /^<([^<>]+\|[^<>]+)>$/;
 const DIRECTIVE_REGEX = /^<([a-z,:A-Z0-9_/\\^$.*+?{}[\]()|' -]+)>$/;
 const IF_DIRECTIVE_REGEX = /^if:([A-Z_][A-Z0-9_]*)$/;
@@ -271,10 +271,14 @@ function parseValue(value: string): ParsedValue {
 
     const secretMatch = SECRET_DIRECTIVE_REGEX.exec(trimmedValue);
     if (secretMatch?.[1]) {
-        return {
-            default: { type: 'secret', length: parseInt(secretMatch[1], 10) },
-            directives: [],
+        const directive: SecretDirective = {
+            type: 'secret',
+            length: parseInt(secretMatch[1], 10),
         };
+        if (secretMatch[2]) {
+            directive.charset = secretMatch[2];
+        }
+        return { default: directive, directives: [] };
     }
 
     const optionsMatch = OPTIONS_DIRECTIVE_REGEX.exec(trimmedValue);
