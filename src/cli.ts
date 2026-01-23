@@ -1,18 +1,23 @@
 import * as p from '@clack/prompts';
 import { Command } from 'commander';
 import { existsSync, readFileSync } from 'node:fs';
-import { parse } from './parser.js';
+import { parse, getVariables } from './parser.js';
 import { validate } from './template-validator.js';
 import { prompt } from './prompter.js';
-import { generateFromTemplate, read, write } from './writer.js';
+import { generate, read, write } from './writer.js';
+import { mergeTemplates } from './merger.js';
 
 interface CliOptions {
-    input: string;
+    input: string[];
     output: string;
     defaults: boolean;
     overwrite: boolean;
     dryRun: boolean;
     quiet: boolean;
+}
+
+function collect(value: string, previous: string[]): string[] {
+    return previous.concat([value]);
 }
 
 async function run(options: CliOptions): Promise<void> {
@@ -21,13 +26,22 @@ async function run(options: CliOptions): Promise<void> {
             p.intro('envfill');
         }
 
-        if (!existsSync(options.input)) {
-            p.log.error(`Template file not found: ${options.input}`);
+        // Default to .env.template if no inputs
+        const inputs = options.input.length > 0 ? options.input : ['.env.template'];
+
+        // Check all files exist upfront
+        const missingFiles = inputs.filter(f => !existsSync(f));
+        if (missingFiles.length > 0) {
+            p.log.error(`Template file${missingFiles.length > 1 ? 's' : ''} not found: ${missingFiles.join(', ')}`);
             process.exit(1);
         }
 
-        const templateContent = readFileSync(options.input, 'utf-8');
-        const template = parse(templateContent);
+        // Parse all templates and merge
+        const templateInputs = inputs.map(file => ({
+            template: parse(readFileSync(file, 'utf-8')),
+            filename: file,
+        }));
+        const template = mergeTemplates(templateInputs);
 
         const errors = validate(template);
         if (errors.length > 0) {
@@ -38,14 +52,15 @@ async function run(options: CliOptions): Promise<void> {
             process.exit(1);
         }
 
-        if (template.variables.length === 0) {
+        const variables = getVariables(template);
+        if (variables.length === 0) {
             p.log.warn('No variables found in template');
             process.exit(0);
         }
 
         const existingValues = options.overwrite ? new Map<string, string>() : read(options.output);
 
-        const result = await prompt(template.variables, {
+        const result = await prompt(template, {
             useDefaults: options.defaults,
             existingValues,
             merge: !options.overwrite,
@@ -59,7 +74,7 @@ async function run(options: CliOptions): Promise<void> {
         const stats = result.stats;
 
         // Find extra variables (in existing .env but not in template)
-        const templateNames = new Set(template.variables.map(v => v.name));
+        const templateNames = new Set(variables.map(v => v.name));
         const extraVariables: Array<{ name: string; value: string }> = [];
         for (const [name, value] of existingValues) {
             if (!templateNames.has(name)) {
@@ -69,7 +84,7 @@ async function run(options: CliOptions): Promise<void> {
 
         // Build resolved values map
         const values = new Map(result.variables.map(v => [v.name, v.value]));
-        const content = generateFromTemplate(templateContent, values, extraVariables);
+        const content = generate(template, values, extraVariables);
 
         if (options.dryRun) {
             if (!options.quiet) {
@@ -102,8 +117,8 @@ const program = new Command();
 program
     .name('envfill')
     .description('Interactive CLI to populate .env files from templates')
-    .version('1.1.0')
-    .option('-i, --input <file>', 'Template file to read', '.env.template')
+    .version('1.0.0')
+    .option('-i, --input <file>', 'Template file (can be repeated, later overrides earlier)', collect, [])
     .option('-o, --output <file>', 'Output file to write', '.env')
     .option('--defaults', 'Use all default values without prompting', false)
     .option('--overwrite', 'Re-prompt for all variables (ignore existing values)', false)

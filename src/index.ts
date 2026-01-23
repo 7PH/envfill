@@ -38,3 +38,5 @@ export { prompt } from './prompter.js';
 export type { PrompterOptions } from './prompter.js';
 export { generate, read, write } from './writer.js';
 export { applyTransforms } from './transformer.js';
+export { mergeTemplates } from './merger.js';
+export type { TemplateInput } from './merger.js';

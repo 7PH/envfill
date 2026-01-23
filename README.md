@@ -1,12 +1,17 @@
 # envfill
 
-Interactive CLI to populate `.env` files from templates.
+**Keep your `.env` in sync with `.env.template`**
 
-## Install
+Added a new env var to the template? `envfill` prompts your team for missing values, validates input, and generates secrets, so nobody runs the app with missing config.
 
 ```bash
 npx envfill
 ```
+
+- **Syncs** — only prompts for new/missing variables, keeps existing values
+- **Validates** — URLs, emails, ports, custom regex
+- **Generates** — secrets, passwords, tokens
+- **Integrates** — shell commands for Vault, 1Password, AWS Secrets Manager
 
 ## Quick Start
 
@@ -122,6 +127,16 @@ envfill --defaults    # Use all defaults
 envfill --overwrite   # Re-prompt all (ignore existing)
 envfill --dry-run     # Preview output
 ```
+
+## Multi-Template Support
+
+Layer templates with multiple `-i` flags (later overrides earlier):
+
+```bash
+envfill -i base.template -i prod.template -i secrets.template
+```
+
+Variables are replaced in-place; new ones appear under file section headers.
 
 ## Use in package.json
 

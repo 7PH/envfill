@@ -83,10 +83,41 @@ export interface EnvVariable {
     lineNumber: number;
 }
 
+// =============================================================================
+// Block-based AST node types
+// =============================================================================
+
+/** Consecutive blank lines */
+export interface WhitespaceNode {
+    type: 'whitespace';
+    count: number;
+}
+
+/** Section header: # --- Name --- */
+export interface SectionNode {
+    type: 'section';
+    name: string;
+    line: string;
+}
+
+/** Variable block with optional preceding description comments */
+export interface VariableNode {
+    type: 'variable';
+    lines: string[];
+    variable: EnvVariable;
+}
+
+/** Standalone comments or unrecognized lines */
+export interface ContentNode {
+    type: 'content';
+    lines: string[];
+}
+
+export type TemplateNode = WhitespaceNode | SectionNode | VariableNode | ContentNode;
+
 /** Output of parse() */
 export interface ParsedTemplate {
-    variables: EnvVariable[];
-    sections: string[];
+    nodes: TemplateNode[];
 }
 
 // =============================================================================
