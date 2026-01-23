@@ -1,4 +1,4 @@
-import type { DirectiveType } from './types.js';
+import type { DirectiveType, RegexDirective } from './types.js';
 
 export interface ValidationResult {
     valid: boolean;
@@ -59,7 +59,22 @@ export function validateRequired(value: string): ValidationResult {
     return { valid: true };
 }
 
-export function createValidator(directives: DirectiveType[]): (value: string) => ValidationResult {
+export function validateRegex(value: string, regex: RegexDirective): ValidationResult {
+    const re = new RegExp(regex.pattern, regex.flags);
+    if (re.test(value)) {
+        return { valid: true };
+    }
+    const patternStr = `/${regex.pattern}/${regex.flags}`;
+    const error = regex.errorMessage
+        ? `${regex.errorMessage} (${patternStr})`
+        : `Value does not match pattern: ${patternStr}`;
+    return { valid: false, error };
+}
+
+export function createValidator(
+    directives: DirectiveType[],
+    regex?: RegexDirective
+): (value: string) => ValidationResult {
     return (value: string): ValidationResult => {
         if (directives.includes('required')) {
             const requiredResult = validateRequired(value);
@@ -95,6 +110,13 @@ export function createValidator(directives: DirectiveType[]): (value: string) =>
             const numberResult = validateNumber(value);
             if (!numberResult.valid) {
                 return numberResult;
+            }
+        }
+
+        if (regex) {
+            const regexResult = validateRegex(value, regex);
+            if (!regexResult.valid) {
+                return regexResult;
             }
         }
 

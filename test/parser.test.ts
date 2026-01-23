@@ -164,6 +164,74 @@ describe('parseTemplate', () => {
             expect(result.variables[0]?.condition).toEqual({ variable: 'FEATURE_ON' });
             expect(result.variables[0]?.directives).toEqual(['required', 'url']);
         });
+
+        it('parses regex directive', () => {
+            const result = parseTemplate('API_KEY=<regex:/^[a-zA-Z0-9]{32}$/>');
+            expect(result.variables[0]?.regex).toEqual({
+                pattern: '^[a-zA-Z0-9]{32}$',
+                flags: '',
+            });
+        });
+
+        it('parses regex directive with flags', () => {
+            const result = parseTemplate('USERNAME=<regex:/^[a-z][a-z0-9_]{2,15}$/i>');
+            expect(result.variables[0]?.regex).toEqual({
+                pattern: '^[a-z][a-z0-9_]{2,15}$',
+                flags: 'i',
+            });
+        });
+
+        it('parses regex directive with error message', () => {
+            const result = parseTemplate('PHONE=<regex:/^\\d{3}-\\d{3}-\\d{4}$/:Enter format XXX-XXX-XXXX>');
+            expect(result.variables[0]?.regex).toEqual({
+                pattern: '^\\d{3}-\\d{3}-\\d{4}$',
+                flags: '',
+                errorMessage: 'Enter format XXX-XXX-XXXX',
+            });
+        });
+
+        it('parses regex directive with flags and error message', () => {
+            const result = parseTemplate('CODE=<regex:/^[A-Z]{3}$/i:Enter 3 letters>');
+            expect(result.variables[0]?.regex).toEqual({
+                pattern: '^[A-Z]{3}$',
+                flags: 'i',
+                errorMessage: 'Enter 3 letters',
+            });
+        });
+
+        it('parses regex with escaped forward slashes', () => {
+            const result = parseTemplate('PATH=<regex:/^\\/api\\/v[12]/>');
+            expect(result.variables[0]?.regex).toEqual({
+                pattern: '^/api/v[12]',
+                flags: '',
+            });
+        });
+
+        it('parses regex combined with required', () => {
+            const result = parseTemplate('API_KEY=<regex:/^[a-z0-9]{32}$/,required>');
+            expect(result.variables[0]?.regex).toEqual({
+                pattern: '^[a-z0-9]{32}$',
+                flags: '',
+            });
+            expect(result.variables[0]?.directives).toEqual(['required']);
+        });
+
+        it('parses regex combined with if condition', () => {
+            const result = parseTemplate('DB_PORT=<if:USE_DB,regex:/^\\d+$/>');
+            expect(result.variables[0]?.regex).toEqual({
+                pattern: '^\\d+$',
+                flags: '',
+            });
+            expect(result.variables[0]?.condition).toEqual({ variable: 'USE_DB' });
+        });
+
+        it('parses regex with multiple flags', () => {
+            const result = parseTemplate('PATTERN=<regex:/test/ims>');
+            expect(result.variables[0]?.regex).toEqual({
+                pattern: 'test',
+                flags: 'ims',
+            });
+        });
     });
 
     describe('section parsing', () => {
@@ -370,6 +438,53 @@ describe('validateTemplate', () => {
 
     it('allows valid conditional variable', () => {
         const template = parseTemplate('STRIPE_ENABLED=<boolean>\nSTRIPE_API_KEY=<if:STRIPE_ENABLED,required>');
+        const errors = validateTemplate(template);
+        expect(errors).toHaveLength(0);
+    });
+
+    it('rejects regex combined with url', () => {
+        const template = parseTemplate('VAR=<regex:/test/,url>');
+        const errors = validateTemplate(template);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain('regex cannot be combined with url');
+    });
+
+    it('rejects regex combined with email', () => {
+        const template = parseTemplate('VAR=<regex:/test/,email>');
+        const errors = validateTemplate(template);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain('regex cannot be combined with email');
+    });
+
+    it('rejects regex combined with port', () => {
+        const template = parseTemplate('VAR=<regex:/test/,port>');
+        const errors = validateTemplate(template);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain('regex cannot be combined with port');
+    });
+
+    it('rejects regex combined with number', () => {
+        const template = parseTemplate('VAR=<regex:/test/,number>');
+        const errors = validateTemplate(template);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain('regex cannot be combined with number');
+    });
+
+    it('rejects regex combined with boolean', () => {
+        const template = parseTemplate('VAR=<regex:/test/,boolean>');
+        const errors = validateTemplate(template);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain('regex cannot be combined with boolean');
+    });
+
+    it('allows regex combined with required', () => {
+        const template = parseTemplate('VAR=<regex:/^[a-z]+$/,required>');
+        const errors = validateTemplate(template);
+        expect(errors).toHaveLength(0);
+    });
+
+    it('allows regex combined with if condition', () => {
+        const template = parseTemplate('FLAG=<boolean>\nVAR=<if:FLAG,regex:/^[a-z]+$/>');
         const errors = validateTemplate(template);
         expect(errors).toHaveLength(0);
     });

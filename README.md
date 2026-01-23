@@ -24,6 +24,9 @@ NODE_ENV=<dev|staging|*prod>
 
 # Public URL
 PUBLIC_URL=<required,url>
+
+# API key (32 alphanumeric chars)
+API_KEY=<regex:/^[a-zA-Z0-9]{32}$/:Enter a 32-char alphanumeric key>
 ```
 
 Run `npx envfill` and get prompted for each value.
@@ -43,6 +46,8 @@ Run `npx envfill` and get prompted for each value.
 | `PORT=<port>`        | Port validation              |
 | `DEBUG=<boolean>`    | Yes/no toggle                |
 | `KEY=<if:VAR>`       | Only prompt if VAR is truthy |
+| `KEY=<regex:/^pattern$/>`| Custom regex validation  |
+| `KEY=<regex:/^pattern$/i:error>`| Regex with flags and custom error |
 
 Combine with comma: `<required,url>` or `<if:ENABLED,required>`
 

@@ -5,6 +5,7 @@ import {
     validateNumber,
     normalizeBoolean,
     validateRequired,
+    validateRegex,
     createValidator,
 } from '../src/validator.js';
 
@@ -190,6 +191,70 @@ describe('validateRequired', () => {
     });
 });
 
+describe('validateRegex', () => {
+    it('accepts value matching pattern', () => {
+        const result = validateRegex('abc123', { pattern: '^[a-z0-9]+$', flags: '' });
+        expect(result.valid).toBe(true);
+    });
+
+    it('rejects value not matching pattern', () => {
+        const result = validateRegex('ABC', { pattern: '^[a-z]+$', flags: '' });
+        expect(result.valid).toBe(false);
+        expect(result.error).toBe('Value does not match pattern: /^[a-z]+$/');
+    });
+
+    it('includes pattern with custom error message', () => {
+        const result = validateRegex('invalid', {
+            pattern: '^sk_[a-z]+$',
+            flags: '',
+            errorMessage: 'Enter a valid Stripe key',
+        });
+        expect(result.valid).toBe(false);
+        expect(result.error).toBe('Enter a valid Stripe key (/^sk_[a-z]+$/)');
+    });
+
+    it('uses custom error message', () => {
+        const result = validateRegex('invalid', {
+            pattern: '^\\d+$',
+            flags: '',
+            errorMessage: 'Please enter only numbers',
+        });
+        expect(result.valid).toBe(false);
+        expect(result.error).toBe('Please enter only numbers (/^\\d+$/)');
+    });
+
+    it('respects case-insensitive flag', () => {
+        const result = validateRegex('ABC', { pattern: '^[a-z]+$', flags: 'i' });
+        expect(result.valid).toBe(true);
+    });
+
+    it('shows flags in error message', () => {
+        const result = validateRegex('123', { pattern: '^[a-z]+$', flags: 'im' });
+        expect(result.valid).toBe(false);
+        expect(result.error).toBe('Value does not match pattern: /^[a-z]+$/im');
+    });
+
+    it('respects multiline flag', () => {
+        const result = validateRegex('line1\nline2', { pattern: '^line2$', flags: 'm' });
+        expect(result.valid).toBe(true);
+    });
+
+    it('validates API key pattern', () => {
+        const regex = { pattern: '^[a-zA-Z0-9]{32}$', flags: '' };
+        expect(validateRegex('abcdefghij1234567890ABCDEFGHIJ12', regex).valid).toBe(true);
+        expect(validateRegex('short', regex).valid).toBe(false);
+        expect(validateRegex('too-long-string-with-extra-chars!!', regex).valid).toBe(false);
+    });
+
+    it('validates phone number pattern', () => {
+        const regex = { pattern: '^\\d{3}-\\d{3}-\\d{4}$', flags: '', errorMessage: 'Enter XXX-XXX-XXXX' };
+        expect(validateRegex('123-456-7890', regex).valid).toBe(true);
+        const invalid = validateRegex('1234567890', regex);
+        expect(invalid.valid).toBe(false);
+        expect(invalid.error).toBe('Enter XXX-XXX-XXXX (/^\\d{3}-\\d{3}-\\d{4}$/)');
+    });
+});
+
 describe('createValidator', () => {
     it('creates validator that checks required', () => {
         const validate = createValidator(['required']);
@@ -238,5 +303,40 @@ describe('createValidator', () => {
         const validate = createValidator([]);
         expect(validate('anything').valid).toBe(true);
         expect(validate('').valid).toBe(true);
+    });
+
+    it('validates with regex', () => {
+        const validate = createValidator([], { pattern: '^[a-z]+$', flags: '' });
+        expect(validate('abc').valid).toBe(true);
+        expect(validate('ABC').valid).toBe(false);
+    });
+
+    it('validates with regex and required', () => {
+        const validate = createValidator(['required'], { pattern: '^[a-z]+$', flags: '' });
+        expect(validate('').valid).toBe(false);
+        expect(validate('abc').valid).toBe(true);
+        expect(validate('123').valid).toBe(false);
+    });
+
+    it('allows empty when regex is set but not required', () => {
+        const validate = createValidator([], { pattern: '^[a-z]+$', flags: '' });
+        expect(validate('').valid).toBe(true);
+    });
+
+    it('validates regex with case-insensitive flag', () => {
+        const validate = createValidator([], { pattern: '^[a-z]+$', flags: 'i' });
+        expect(validate('ABC').valid).toBe(true);
+        expect(validate('abc').valid).toBe(true);
+    });
+
+    it('uses custom regex error message with pattern', () => {
+        const validate = createValidator([], {
+            pattern: '^\\d{4}$',
+            flags: '',
+            errorMessage: 'Enter a 4-digit code',
+        });
+        const result = validate('12');
+        expect(result.valid).toBe(false);
+        expect(result.error).toBe('Enter a 4-digit code (/^\\d{4}$/)');
     });
 });
