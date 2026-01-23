@@ -56,6 +56,10 @@ describe('CLI E2E Tests', () => {
 
             // Static default value
             expect(env.get('DEBUG')).toBe('false');
+
+            // Interpolation
+            expect(env.get('DB_HOST')).toBe('localhost');
+            expect(env.get('DB_URL')).toBe('postgres://user:pass@localhost:5432/db');
         });
 
         it('evaluates conditionals and skips variables when condition is false', () => {
@@ -456,6 +460,62 @@ VAR=<if:FLAG_A,if:FLAG_B>`
             // Variable should have empty value
             const env = ctx.readEnvFile();
             expect(env.get('BROKEN')).toBe('');
+        });
+    });
+
+    describe('Variable interpolation', () => {
+        it('resolves ${VAR} references in default values', () => {
+            writeFileSync(
+                join(ctx.dir, 'interpolation.template'),
+                `DB_USER=postgres
+DB_PASS=\${DB_USER}_secret
+DB_URL=postgres://\${DB_USER}:\${DB_PASS}@localhost`
+            );
+
+            const result = ctx.runCli(['-i', 'interpolation.template', '--defaults', '-q']);
+            expect(result.exitCode).toBe(0);
+
+            const env = ctx.readEnvFile();
+            expect(env.get('DB_USER')).toBe('postgres');
+            expect(env.get('DB_PASS')).toBe('postgres_secret');
+            expect(env.get('DB_URL')).toBe('postgres://postgres:postgres_secret@localhost');
+        });
+
+        it('rejects forward references', () => {
+            writeFileSync(
+                join(ctx.dir, 'forward-ref.template'),
+                `SECOND=\${FIRST}_suffix
+FIRST=value`
+            );
+
+            const result = ctx.runCli(['-i', 'forward-ref.template', '--defaults']);
+            expect(result.exitCode).toBe(1);
+            expect(result.stdout).toContain('references undefined variable');
+        });
+
+        it('rejects self-references', () => {
+            writeFileSync(join(ctx.dir, 'self-ref.template'), `VAR=\${VAR}_loop`);
+
+            const result = ctx.runCli(['-i', 'self-ref.template', '--defaults']);
+            expect(result.exitCode).toBe(1);
+            expect(result.stdout).toContain('cannot reference itself');
+        });
+
+        it('interpolates values from shell commands', () => {
+            writeFileSync(
+                join(ctx.dir, 'shell-interp.template'),
+                `HOSTNAME=\`hostname\`
+GREETING=Hello from \${HOSTNAME}`
+            );
+
+            const result = ctx.runCli(['-i', 'shell-interp.template', '--defaults', '-q']);
+            expect(result.exitCode).toBe(0);
+
+            const env = ctx.readEnvFile();
+            const hostname = env.get('HOSTNAME');
+            expect(hostname).toBeDefined();
+            expect(hostname!.length).toBeGreaterThan(0);
+            expect(env.get('GREETING')).toBe(`Hello from ${hostname}`);
         });
     });
 });

@@ -5,16 +5,21 @@ export type {
     ShellDefault,
     StaticDefault,
     DefaultValue,
+    ConditionDirective,
+    RegexDirective,
     EnvVariable,
     ParsedTemplate,
     ResolvedVariable,
     EnvfillOptions,
     PrompterStats,
     PrompterResult,
+    ResolveResult,
+    ValidationResult,
 } from './types.js';
 
-export { parseTemplate, validateTemplate } from './parser.js';
-export { resolveDefault, executeShellCommand, generateSecret } from './resolver.js';
+export { parse } from './parser.js';
+export { validate } from './template-validator.js';
+export { resolve, interpolate, executeShellCommand, generateSecret } from './resolver.js';
 export {
     validateUrl,
     validateEmail,
@@ -22,8 +27,9 @@ export {
     validateNumber,
     normalizeBoolean,
     validateRequired,
+    validateRegex,
     createValidator,
 } from './validator.js';
-export { promptForVariables } from './prompter.js';
+export { prompt } from './prompter.js';
 export type { PrompterOptions } from './prompter.js';
-export { generateEnvContent, readExistingEnv, writeEnvFile } from './writer.js';
+export { generate, read, write } from './writer.js';

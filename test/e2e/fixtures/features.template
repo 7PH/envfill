@@ -24,3 +24,9 @@ DB_TYPE=<postgres|mysql|sqlite>
 
 # Debug mode
 DEBUG=false
+
+# --- Interpolation ---
+
+# Database connection string
+DB_HOST=localhost
+DB_URL=postgres://user:pass@${DB_HOST}:5432/db

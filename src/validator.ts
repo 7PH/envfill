@@ -1,9 +1,4 @@
-import type { DirectiveType, RegexDirective } from './types.js';
-
-export interface ValidationResult {
-    valid: boolean;
-    error?: string;
-}
+import type { DirectiveType, RegexDirective, ValidationResult } from './types.js';
 
 export function validateUrl(value: string): ValidationResult {
     try {

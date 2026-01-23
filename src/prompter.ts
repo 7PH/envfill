@@ -1,6 +1,6 @@
 import * as p from '@clack/prompts';
 import type { EnvVariable, ResolvedVariable, PrompterStats, PrompterResult } from './types.js';
-import { resolveDefault } from './resolver.js';
+import { resolve, interpolate } from './resolver.js';
 import { createValidator, normalizeBoolean } from './validator.js';
 
 export interface PrompterOptions {
@@ -31,79 +31,6 @@ function evaluateCondition(
     }
     const normalized = normalizeBoolean(conditionValue);
     return normalized === true;
-}
-
-export async function promptForVariables(
-    variables: EnvVariable[],
-    options: PrompterOptions
-): Promise<PrompterResult | null> {
-    const results: ResolvedVariable[] = [];
-    const resolvedValues = new Map<string, string>();
-    const stats: PrompterStats = { prompted: 0, defaults: 0, kept: 0, generated: 0, skipped: 0 };
-    let currentSection: string | undefined;
-
-    for (const variable of variables) {
-        if (options.merge && options.existingValues.has(variable.name)) {
-            const existingValue = options.existingValues.get(variable.name);
-            if (existingValue !== undefined) {
-                results.push(createResolvedVariable(variable.name, existingValue, variable.section));
-                resolvedValues.set(variable.name, existingValue);
-                stats.kept++;
-                continue;
-            }
-        }
-
-        if (variable.condition && !evaluateCondition(variable.condition, resolvedValues)) {
-            results.push(createResolvedVariable(variable.name, '', variable.section));
-            resolvedValues.set(variable.name, '');
-            stats.skipped++;
-            continue;
-        }
-
-        if (variable.section && variable.section !== currentSection) {
-            currentSection = variable.section;
-            if (!options.quiet) {
-                p.log.step(`\n${currentSection}`);
-            }
-        }
-
-        const resolved = resolveDefault(variable.default);
-
-        if (variable.default?.type === 'secret') {
-            if (!options.quiet) {
-                const description = variable.description ?? variable.name;
-                p.log.info(`${description}: Generated ${variable.default.length}-char secret`);
-            }
-            results.push(createResolvedVariable(variable.name, resolved.value, variable.section));
-            resolvedValues.set(variable.name, resolved.value);
-            stats.generated++;
-            continue;
-        }
-
-        if (options.useDefaults) {
-            if (variable.directives.includes('required') && resolved.value === '') {
-                p.log.error(`${variable.name} is required but has no default value`);
-                return null;
-            }
-            results.push(createResolvedVariable(variable.name, resolved.value, variable.section));
-            resolvedValues.set(variable.name, resolved.value);
-            stats.defaults++;
-            continue;
-        }
-
-        const value = await promptForVariable(variable, resolved.value, resolved.error);
-
-        if (isUserCancelled(value)) {
-            p.cancel('Operation cancelled');
-            return null;
-        }
-
-        results.push(createResolvedVariable(variable.name, value, variable.section));
-        resolvedValues.set(variable.name, value);
-        stats.prompted++;
-    }
-
-    return { variables: results, stats };
 }
 
 async function promptForVariable(
@@ -178,4 +105,92 @@ async function promptForVariable(
     }
 
     return result ?? '';
+}
+
+/**
+ * Prompt the user for variable values interactively.
+ * @returns Resolved variables and stats, or null if cancelled
+ */
+export async function prompt(
+    variables: EnvVariable[],
+    options: PrompterOptions
+): Promise<PrompterResult | null> {
+    const results: ResolvedVariable[] = [];
+    const resolvedValues = new Map<string, string>();
+    const stats: PrompterStats = { prompted: 0, defaults: 0, kept: 0, generated: 0, skipped: 0 };
+    let currentSection: string | undefined;
+
+    for (const variable of variables) {
+        if (options.merge && options.existingValues.has(variable.name)) {
+            const existingValue = options.existingValues.get(variable.name);
+            if (existingValue !== undefined) {
+                results.push(createResolvedVariable(variable.name, existingValue, variable.section));
+                resolvedValues.set(variable.name, existingValue);
+                stats.kept++;
+                continue;
+            }
+        }
+
+        if (variable.condition && !evaluateCondition(variable.condition, resolvedValues)) {
+            results.push(createResolvedVariable(variable.name, '', variable.section));
+            resolvedValues.set(variable.name, '');
+            stats.skipped++;
+            continue;
+        }
+
+        if (variable.section && variable.section !== currentSection) {
+            currentSection = variable.section;
+            if (!options.quiet) {
+                p.log.step(`\n${currentSection}`);
+            }
+        }
+
+        const resolved = resolve(variable.default);
+
+        // Interpolate ${VAR} references
+        if (resolved.value && !resolved.error) {
+            const interpolated = interpolate(resolved.value, resolvedValues);
+            if (interpolated.error) {
+                resolved.error = interpolated.error;
+                resolved.value = '';
+            } else {
+                resolved.value = interpolated.value;
+            }
+        }
+
+        if (variable.default?.type === 'secret') {
+            if (!options.quiet) {
+                const description = variable.description ?? variable.name;
+                p.log.info(`${description}: Generated ${variable.default.length}-char secret`);
+            }
+            results.push(createResolvedVariable(variable.name, resolved.value, variable.section));
+            resolvedValues.set(variable.name, resolved.value);
+            stats.generated++;
+            continue;
+        }
+
+        if (options.useDefaults) {
+            if (variable.directives.includes('required') && resolved.value === '') {
+                p.log.error(`${variable.name} is required but has no default value`);
+                return null;
+            }
+            results.push(createResolvedVariable(variable.name, resolved.value, variable.section));
+            resolvedValues.set(variable.name, resolved.value);
+            stats.defaults++;
+            continue;
+        }
+
+        const value = await promptForVariable(variable, resolved.value, resolved.error);
+
+        if (isUserCancelled(value)) {
+            p.cancel('Operation cancelled');
+            return null;
+        }
+
+        results.push(createResolvedVariable(variable.name, value, variable.section));
+        resolvedValues.set(variable.name, value);
+        stats.prompted++;
+    }
+
+    return { variables: results, stats };
 }

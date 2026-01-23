@@ -1,9 +1,10 @@
 import * as p from '@clack/prompts';
 import { Command } from 'commander';
 import { existsSync, readFileSync } from 'node:fs';
-import { parseTemplate, validateTemplate } from './parser.js';
-import { promptForVariables } from './prompter.js';
-import { generateEnvContentFromTemplate, readExistingEnv, writeEnvFile } from './writer.js';
+import { parse } from './parser.js';
+import { validate } from './template-validator.js';
+import { prompt } from './prompter.js';
+import { generate, read, write } from './writer.js';
 
 const program = new Command();
 
@@ -36,9 +37,9 @@ program
             }
 
             const templateContent = readFileSync(options.input, 'utf-8');
-            const template = parseTemplate(templateContent);
+            const template = parse(templateContent);
 
-            const errors = validateTemplate(template);
+            const errors = validate(template);
             if (errors.length > 0) {
                 p.log.error('Template validation errors:');
                 for (const error of errors) {
@@ -52,9 +53,9 @@ program
                 process.exit(0);
             }
 
-            const existingValues = options.overwrite ? new Map<string, string>() : readExistingEnv(options.output);
+            const existingValues = options.overwrite ? new Map<string, string>() : read(options.output);
 
-            const result = await promptForVariables(template.variables, {
+            const result = await prompt(template.variables, {
                 useDefaults: options.defaults,
                 existingValues,
                 merge: !options.overwrite,
@@ -66,7 +67,7 @@ program
             }
 
             const stats = result.stats;
-            let content = generateEnvContentFromTemplate(templateContent, result.variables);
+            let content = generate(result.variables);
 
             // Find and append extraneous variables (in existing .env but not in template)
             const templateNames = new Set(template.variables.map(v => v.name));
@@ -89,7 +90,7 @@ program
                 }
                 console.log(content);
             } else {
-                writeEnvFile(options.output, content);
+                write(options.output, content);
                 if (!options.quiet) {
                     const parts: string[] = [];
                     if (stats.prompted > 0) parts.push(`${stats.prompted} prompted`);

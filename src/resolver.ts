@@ -1,11 +1,9 @@
 import { execSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import type { DefaultValue } from './types.js';
+import type { DefaultValue, ResolveResult } from './types.js';
 
-export interface ResolveResult {
-    value: string;
-    error?: string;
-}
+/** Pattern for ${VAR} variable interpolation references */
+export const INTERPOLATION_PATTERN = /\$\{([A-Z_][A-Z0-9_]*)\}/g;
 
 export function executeShellCommand(command: string): ResolveResult {
     try {
@@ -36,7 +34,11 @@ export function generateSecret(length: number): string {
     return result;
 }
 
-export function resolveDefault(defaultValue: DefaultValue | undefined): ResolveResult {
+/**
+ * Resolve a default value to its actual string.
+ * Executes shell commands, generates secrets, extracts options.
+ */
+export function resolve(defaultValue: DefaultValue | undefined): ResolveResult {
     if (!defaultValue) {
         return { value: '' };
     }
@@ -54,4 +56,28 @@ export function resolveDefault(defaultValue: DefaultValue | undefined): ResolveR
     case 'options':
         return { value: defaultValue.defaultChoice ?? defaultValue.choices[0] ?? '' };
     }
+}
+
+/**
+ * Replace ${VAR} references with their resolved values.
+ */
+export function interpolate(
+    value: string,
+    resolvedValues: Map<string, string>
+): ResolveResult {
+    const pattern = new RegExp(INTERPOLATION_PATTERN.source, 'g');
+    let result = value;
+    let match;
+
+    while ((match = pattern.exec(value)) !== null) {
+        const varName = match[1];
+        if (!varName) continue;
+        const resolved = resolvedValues.get(varName);
+        if (resolved === undefined) {
+            return { value: '', error: `Undefined variable: ${varName}` };
+        }
+        result = result.replace(match[0], resolved);
+    }
+
+    return { value: result };
 }
