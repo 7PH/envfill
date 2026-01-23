@@ -1,0 +1,26 @@
+# --- System ---
+
+# User ID for Docker containers
+UID=`id -u`
+
+# Group ID for Docker containers
+GID=`id -g`
+
+# --- Security ---
+
+# Application secret key
+SECRET_KEY=<secret:32>
+
+# API token
+API_TOKEN=<secret:16>
+
+# --- Settings ---
+
+# Deployment environment
+NODE_ENV=<development|staging|*production>
+
+# Database type
+DB_TYPE=<postgres|mysql|sqlite>
+
+# Debug mode
+DEBUG=false

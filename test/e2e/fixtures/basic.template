@@ -1,0 +1,10 @@
+# --- Application ---
+
+# Server port
+PORT=3000
+
+# Application name
+APP_NAME=myapp
+
+# Debug mode enabled
+DEBUG=false

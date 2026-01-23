@@ -1,0 +1,5 @@
+# Invalid template: uses condition variable before it's defined
+STRIPE_API_KEY=<if:STRIPE_ENABLED,required>
+
+# Condition variable defined after being referenced (invalid)
+STRIPE_ENABLED=<boolean>

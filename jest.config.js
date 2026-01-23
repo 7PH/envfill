@@ -15,7 +15,7 @@ export default {
             },
         ],
     },
-    collectCoverageFrom: ['src/**/*.ts', '!src/cli.ts'],
+    collectCoverageFrom: ['src/**/*.ts', '!src/index.ts'],
     coverageDirectory: 'coverage',
     extensionsToTreatAsEsm: ['.ts'],
 };
