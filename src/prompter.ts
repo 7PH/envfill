@@ -2,6 +2,7 @@ import * as p from '@clack/prompts';
 import type { EnvVariable, ResolvedVariable, PrompterStats, PrompterResult } from './types.js';
 import { resolve, interpolate } from './resolver.js';
 import { createValidator, normalizeBoolean } from './validator.js';
+import { applyTransforms } from './transformer.js';
 
 export interface PrompterOptions {
     useDefaults: boolean;
@@ -170,12 +171,19 @@ export async function prompt(
         }
 
         if (options.useDefaults) {
-            if (variable.directives.includes('required') && resolved.value === '') {
+            let finalValue = resolved.value;
+
+            // Apply transforms before validation
+            if (variable.transforms?.length) {
+                finalValue = applyTransforms(finalValue, variable.transforms);
+            }
+
+            if (variable.directives.includes('required') && finalValue === '') {
                 p.log.error(`${variable.name} is required but has no default value`);
                 return null;
             }
-            results.push(createResolvedVariable(variable.name, resolved.value, variable.section));
-            resolvedValues.set(variable.name, resolved.value);
+            results.push(createResolvedVariable(variable.name, finalValue, variable.section));
+            resolvedValues.set(variable.name, finalValue);
             stats.defaults++;
             continue;
         }
@@ -187,8 +195,14 @@ export async function prompt(
             return null;
         }
 
-        results.push(createResolvedVariable(variable.name, value, variable.section));
-        resolvedValues.set(variable.name, value);
+        // Apply transforms after user input, before storing
+        let finalValue = value;
+        if (variable.transforms?.length) {
+            finalValue = applyTransforms(value, variable.transforms);
+        }
+
+        results.push(createResolvedVariable(variable.name, finalValue, variable.section));
+        resolvedValues.set(variable.name, finalValue);
         stats.prompted++;
     }
 

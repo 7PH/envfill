@@ -44,6 +44,31 @@ export interface RegexDirective {
     errorMessage?: string;
 }
 
+// =============================================================================
+// Transform types
+// =============================================================================
+
+/** Replace transform: <replace:/pattern/replacement/flags> */
+export interface ReplaceTransform {
+    type: 'replace';
+    pattern: string;
+    replacement: string;
+    flags: string;
+}
+
+/** Trim transform: <trim:chars> */
+export interface TrimTransform {
+    type: 'trim';
+    chars: string;
+}
+
+/** Simple transform: <lowercase>, <uppercase>, <slugify> */
+export interface SimpleTransform {
+    type: 'lowercase' | 'uppercase' | 'slugify';
+}
+
+export type Transform = SimpleTransform | ReplaceTransform | TrimTransform;
+
 /** A single variable from the template */
 export interface EnvVariable {
     name: string;
@@ -52,6 +77,7 @@ export interface EnvVariable {
     directives: DirectiveType[];
     condition?: ConditionDirective;
     regex?: RegexDirective;
+    transforms?: Transform[];
     section?: string;
     lineNumber: number;
 }
