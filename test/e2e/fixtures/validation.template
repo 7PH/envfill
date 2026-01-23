@@ -1,0 +1,7 @@
+SITE_URL=<url>
+ADMIN_EMAIL=<email>
+SERVER_PORT=<port>
+MAX_CONNECTIONS=<number>
+API_KEY=<required>
+VERSION=<regex:/^v\d+\.\d+\.\d+$/>
+ENABLE_FEATURE=<boolean>
