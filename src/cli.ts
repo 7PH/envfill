@@ -4,7 +4,98 @@ import { existsSync, readFileSync } from 'node:fs';
 import { parse } from './parser.js';
 import { validate } from './template-validator.js';
 import { prompt } from './prompter.js';
-import { generate, read, write } from './writer.js';
+import { generateFromTemplate, read, write } from './writer.js';
+
+interface CliOptions {
+    input: string;
+    output: string;
+    defaults: boolean;
+    overwrite: boolean;
+    dryRun: boolean;
+    quiet: boolean;
+}
+
+async function run(options: CliOptions): Promise<void> {
+    try {
+        if (!options.quiet) {
+            p.intro('envfill');
+        }
+
+        if (!existsSync(options.input)) {
+            p.log.error(`Template file not found: ${options.input}`);
+            process.exit(1);
+        }
+
+        const templateContent = readFileSync(options.input, 'utf-8');
+        const template = parse(templateContent);
+
+        const errors = validate(template);
+        if (errors.length > 0) {
+            p.log.error('Template validation errors:');
+            for (const error of errors) {
+                p.log.error(`  ${error}`);
+            }
+            process.exit(1);
+        }
+
+        if (template.variables.length === 0) {
+            p.log.warn('No variables found in template');
+            process.exit(0);
+        }
+
+        const existingValues = options.overwrite ? new Map<string, string>() : read(options.output);
+
+        const result = await prompt(template.variables, {
+            useDefaults: options.defaults,
+            existingValues,
+            merge: !options.overwrite,
+            quiet: options.quiet,
+        });
+
+        if (result === null) {
+            process.exit(1);
+        }
+
+        const stats = result.stats;
+
+        // Find extra variables (in existing .env but not in template)
+        const templateNames = new Set(template.variables.map(v => v.name));
+        const extraVariables: Array<{ name: string; value: string }> = [];
+        for (const [name, value] of existingValues) {
+            if (!templateNames.has(name)) {
+                extraVariables.push({ name, value });
+            }
+        }
+
+        // Build resolved values map
+        const values = new Map(result.variables.map(v => [v.name, v.value]));
+        const content = generateFromTemplate(templateContent, values, extraVariables);
+
+        if (options.dryRun) {
+            if (!options.quiet) {
+                p.log.step('Preview:');
+            }
+            console.log(content);
+        } else {
+            write(options.output, content);
+            if (!options.quiet) {
+                const parts: string[] = [];
+                if (stats.prompted > 0) parts.push(`${stats.prompted} prompted`);
+                if (stats.kept > 0) parts.push(`${stats.kept} kept`);
+                if (stats.defaults > 0) parts.push(`${stats.defaults} defaults`);
+                if (stats.generated > 0) parts.push(`${stats.generated} generated`);
+                if (stats.skipped > 0) parts.push(`${stats.skipped} skipped`);
+                if (extraVariables.length > 0) parts.push(`${extraVariables.length} extra`);
+                const summary = parts.length > 0 ? ` (${parts.join(', ')})` : '';
+                p.outro(`Wrote ${result.variables.length + extraVariables.length} variables to ${options.output}${summary}`);
+            }
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        p.log.error(message);
+        process.exit(1);
+    }
+}
 
 const program = new Command();
 
@@ -18,96 +109,6 @@ program
     .option('--overwrite', 'Re-prompt for all variables (ignore existing values)', false)
     .option('--dry-run', 'Preview output without writing to file', false)
     .option('-q, --quiet', 'Minimal output', false)
-    .action(async (options: {
-        input: string;
-        output: string;
-        defaults: boolean;
-        overwrite: boolean;
-        dryRun: boolean;
-        quiet: boolean;
-    }) => {
-        try {
-            if (!options.quiet) {
-                p.intro('envfill');
-            }
-
-            if (!existsSync(options.input)) {
-                p.log.error(`Template file not found: ${options.input}`);
-                process.exit(1);
-            }
-
-            const templateContent = readFileSync(options.input, 'utf-8');
-            const template = parse(templateContent);
-
-            const errors = validate(template);
-            if (errors.length > 0) {
-                p.log.error('Template validation errors:');
-                for (const error of errors) {
-                    p.log.error(`  ${error}`);
-                }
-                process.exit(1);
-            }
-
-            if (template.variables.length === 0) {
-                p.log.warn('No variables found in template');
-                process.exit(0);
-            }
-
-            const existingValues = options.overwrite ? new Map<string, string>() : read(options.output);
-
-            const result = await prompt(template.variables, {
-                useDefaults: options.defaults,
-                existingValues,
-                merge: !options.overwrite,
-                quiet: options.quiet,
-            });
-
-            if (result === null) {
-                process.exit(1);
-            }
-
-            const stats = result.stats;
-            let content = generate(result.variables);
-
-            // Find and append extraneous variables (in existing .env but not in template)
-            const templateNames = new Set(template.variables.map(v => v.name));
-            const extraVariables: Array<{ name: string; value: string }> = [];
-            for (const [name, value] of existingValues) {
-                if (!templateNames.has(name)) {
-                    extraVariables.push({ name, value });
-                }
-            }
-            if (extraVariables.length > 0) {
-                content += '\n# --- Extra (not in template) ---\n';
-                for (const { name, value } of extraVariables) {
-                    content += `${name}=${value}\n`;
-                }
-            }
-
-            if (options.dryRun) {
-                if (!options.quiet) {
-                    p.log.step('Preview:');
-                }
-                console.log(content);
-            } else {
-                write(options.output, content);
-                if (!options.quiet) {
-                    const parts: string[] = [];
-                    if (stats.prompted > 0) parts.push(`${stats.prompted} prompted`);
-                    if (stats.kept > 0) parts.push(`${stats.kept} kept`);
-                    if (stats.defaults > 0) parts.push(`${stats.defaults} defaults`);
-                    if (stats.generated > 0) parts.push(`${stats.generated} generated`);
-                    if (stats.skipped > 0) parts.push(`${stats.skipped} skipped`);
-                    if (extraVariables.length > 0) parts.push(`${extraVariables.length} extra`);
-                    const summary = parts.length > 0 ? ` (${parts.join(', ')})` : '';
-                    p.outro(`Wrote ${result.variables.length + extraVariables.length} variables to ${options.output}${summary}`);
-                }
-            }
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            p.log.error(message);
-            process.exit(1);
-        }
-    });
+    .action(run);
 
 program.parse();
