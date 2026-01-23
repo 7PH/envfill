@@ -153,7 +153,7 @@ async function promptForVariable(
         return result as string;
     }
 
-    const validator = createValidator(variable.directives);
+    const validator = createValidator(variable.directives, variable.regex);
 
     const textOptions: Parameters<typeof p.text>[0] = {
         message,

@@ -27,12 +27,19 @@ export interface ConditionDirective {
     variable: string;
 }
 
+export interface RegexDirective {
+    pattern: string;
+    flags: string;
+    errorMessage?: string;
+}
+
 export interface EnvVariable {
     name: string;
     description?: string;
     default?: DefaultValue;
     directives: DirectiveType[];
     condition?: ConditionDirective;
+    regex?: RegexDirective;
     section?: string;
     lineNumber: number;
 }
