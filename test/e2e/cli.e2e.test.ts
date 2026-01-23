@@ -556,6 +556,99 @@ VAR=<if:FLAG_A,if:FLAG_B>`
         });
     });
 
+    describe('Template format preservation', () => {
+        it('preserves exact template format including standalone comments and whitespace', () => {
+            const template = `# --- Docker Configuration ---
+
+# Your user ID for Docker containers
+DOCKER_UID=\`id -u\`
+
+
+
+# Comment in the middle of nowhere
+
+
+
+# Your group ID for Docker containers
+DOCKER_GID=\`id -g\``;
+            writeFileSync(join(ctx.dir, 'format.template'), template);
+
+            const result = ctx.runCli(['-i', 'format.template', '--defaults', '-q']);
+            expect(result.exitCode).toBe(0);
+
+            const content = readFileSync(join(ctx.dir, '.env'), 'utf-8');
+            const env = ctx.readEnvFile();
+
+            // Values should be resolved
+            expect(env.get('DOCKER_UID')).toMatch(/^\d+$/);
+            expect(env.get('DOCKER_GID')).toMatch(/^\d+$/);
+
+            // Standalone comment should be preserved
+            expect(content).toContain('# Comment in the middle of nowhere');
+
+            // Blank lines around standalone comment should be preserved
+            expect(content).toMatch(/\n\n\n# Comment in the middle of nowhere\n\n\n/);
+
+            // Section header should be preserved
+            expect(content).toContain('# --- Docker Configuration ---');
+        });
+
+        it('preserves exact comment prefix style (# vs #)', () => {
+            writeFileSync(
+                join(ctx.dir, 'prefix.template'),
+                `#No space after hash
+# Space after hash
+PORT=3000`
+            );
+
+            const result = ctx.runCli(['-i', 'prefix.template', '--defaults', '-q']);
+            expect(result.exitCode).toBe(0);
+
+            const content = readFileSync(join(ctx.dir, '.env'), 'utf-8');
+            expect(content).toContain('#No space after hash');
+            expect(content).toContain('# Space after hash');
+        });
+
+        it('preserves variable descriptions and spacing in output', () => {
+            writeFileSync(
+                join(ctx.dir, 'descriptions.template'),
+                `# --- Config ---
+
+# Server port number
+PORT=3000
+
+# Enable debug mode
+DEBUG=false`
+            );
+
+            const result = ctx.runCli(['-i', 'descriptions.template', '--defaults', '-q']);
+            expect(result.exitCode).toBe(0);
+
+            const content = readFileSync(join(ctx.dir, '.env'), 'utf-8');
+            // Section header followed by blank line
+            expect(content).toContain('# --- Config ---\n\n');
+            // Description directly above variable
+            expect(content).toContain('# Server port number\nPORT=3000');
+            expect(content).toContain('# Enable debug mode\nDEBUG=false');
+        });
+
+        it('preserves multi-line descriptions', () => {
+            writeFileSync(
+                join(ctx.dir, 'multiline.template'),
+                `# Your group ID for Docker containers
+# This is needed if files created by the container
+GID=1000`
+            );
+
+            const result = ctx.runCli(['-i', 'multiline.template', '--defaults', '-q']);
+            expect(result.exitCode).toBe(0);
+
+            const content = readFileSync(join(ctx.dir, '.env'), 'utf-8');
+            // Both lines of the multi-line comment should appear
+            expect(content).toContain('# Your group ID for Docker containers\n# This is needed if files created by the container\nGID=1000');
+        });
+    });
+
     describe('Variable interpolation', () => {
         it('resolves ${VAR} references in default values', () => {
             writeFileSync(
@@ -587,7 +680,7 @@ FIRST=value`
         });
 
         it('rejects self-references', () => {
-            writeFileSync(join(ctx.dir, 'self-ref.template'), `VAR=\${VAR}_loop`);
+            writeFileSync(join(ctx.dir, 'self-ref.template'), 'VAR=${VAR}_loop');
 
             const result = ctx.runCli(['-i', 'self-ref.template', '--defaults']);
             expect(result.exitCode).toBe(1);

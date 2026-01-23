@@ -107,6 +107,7 @@ export interface ResolvedVariable {
     name: string;
     value: string;
     section?: string;
+    description?: string;
 }
 
 export interface PrompterStats {

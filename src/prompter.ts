@@ -15,11 +15,20 @@ function isUserCancelled(value: unknown): value is symbol {
     return p.isCancel(value);
 }
 
-function createResolvedVariable(name: string, value: string, section: string | undefined): ResolvedVariable {
+function createResolvedVariable(
+    name: string,
+    value: string,
+    section: string | undefined,
+    description: string | undefined
+): ResolvedVariable {
+    const result: ResolvedVariable = { name, value };
     if (section !== undefined) {
-        return { name, value, section };
+        result.section = section;
     }
-    return { name, value };
+    if (description !== undefined) {
+        result.description = description;
+    }
+    return result;
 }
 
 function evaluateCondition(
@@ -125,7 +134,7 @@ export async function prompt(
         if (options.merge && options.existingValues.has(variable.name)) {
             const existingValue = options.existingValues.get(variable.name);
             if (existingValue !== undefined) {
-                results.push(createResolvedVariable(variable.name, existingValue, variable.section));
+                results.push(createResolvedVariable(variable.name, existingValue, variable.section, variable.description));
                 resolvedValues.set(variable.name, existingValue);
                 stats.kept++;
                 continue;
@@ -133,7 +142,7 @@ export async function prompt(
         }
 
         if (variable.condition && !evaluateCondition(variable.condition, resolvedValues)) {
-            results.push(createResolvedVariable(variable.name, '', variable.section));
+            results.push(createResolvedVariable(variable.name, '', variable.section, variable.description));
             resolvedValues.set(variable.name, '');
             stats.skipped++;
             continue;
@@ -164,7 +173,7 @@ export async function prompt(
                 const description = variable.description ?? variable.name;
                 p.log.info(`${description}: Generated ${variable.default.length}-char secret`);
             }
-            results.push(createResolvedVariable(variable.name, resolved.value, variable.section));
+            results.push(createResolvedVariable(variable.name, resolved.value, variable.section, variable.description));
             resolvedValues.set(variable.name, resolved.value);
             stats.generated++;
             continue;
@@ -182,7 +191,7 @@ export async function prompt(
                 p.log.error(`${variable.name} is required but has no default value`);
                 return null;
             }
-            results.push(createResolvedVariable(variable.name, finalValue, variable.section));
+            results.push(createResolvedVariable(variable.name, finalValue, variable.section, variable.description));
             resolvedValues.set(variable.name, finalValue);
             stats.defaults++;
             continue;
@@ -201,7 +210,7 @@ export async function prompt(
             finalValue = applyTransforms(value, variable.transforms);
         }
 
-        results.push(createResolvedVariable(variable.name, finalValue, variable.section));
+        results.push(createResolvedVariable(variable.name, finalValue, variable.section, variable.description));
         resolvedValues.set(variable.name, finalValue);
         stats.prompted++;
     }
