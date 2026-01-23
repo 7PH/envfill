@@ -33,29 +33,45 @@ Run `npx envfill` and get prompted for each value.
 
 ## Template Syntax
 
-| Value                            | Behavior                          |
-| -------------------------------- | --------------------------------- |
-| `PORT=3000`                      | Default value                     |
-| `KEY=`                           | Prompt (no default)               |
-| `` UID=`id -u` ``                | Shell command as default          |
-| `SECRET=<secret:32>`             | Auto-generate                     |
-| `ENV=<a\|b\|*c>`                 | Options (`*` = default)           |
-| `URL=<required>`                 | Must provide                      |
-| `URL=<url>`                      | URL validation                    |
-| `EMAIL=<email>`                  | Email validation                  |
-| `PORT=<port>`                    | Port validation                   |
-| `DEBUG=<boolean>`                | Yes/no toggle                     |
-| `KEY=<if:VAR>`                   | Only prompt if VAR is truthy      |
-| `B=${A}_suffix`                  | Variable interpolation            |
-| `KEY=<regex:/^pattern$/>`        | Custom regex validation           |
-| `KEY=<regex:/^pattern$/i:error>` | Regex with flags and custom error |
-| `NAME=<lowercase>`               | Transform to lowercase            |
-| `NAME=<uppercase>`               | Transform to uppercase            |
-| `SLUG=<slugify>`                 | Slugify (lowercase + dashes)      |
-| `NAME=<trim:->`                  | Trim chars from edges             |
-| `NAME=<replace:/pat/repl/g>`     | Regex replace                     |
+| Value                             | Behavior                          |
+| --------------------------------- | --------------------------------- |
+| `PORT=3000`                       | Default value                     |
+| `KEY=`                            | Prompt (no default)               |
+| `` UID=`id -u` ``                 | Shell command as default          |
+| `SECRET=<secret:32>`              | Auto-generate (alphanumeric)      |
+| `TOKEN=<secret:16:alnum+special>` | Auto-generate with charset        |
+| `ENV=<a\|b\|*c>`                  | Options (`*` = default)           |
+| `URL=<required>`                  | Must provide                      |
+| `URL=<url>`                       | URL validation                    |
+| `EMAIL=<email>`                   | Email validation                  |
+| `PORT=<port>`                     | Port validation                   |
+| `DEBUG=<boolean>`                 | Yes/no toggle                     |
+| `KEY=<if:VAR>`                    | Only prompt if VAR is truthy      |
+| `B=${A}_suffix`                   | Variable interpolation            |
+| `KEY=<regex:/^pattern$/>`         | Custom regex validation           |
+| `KEY=<regex:/^pattern$/i:error>`  | Regex with flags and custom error |
+| `NAME=<lowercase>`                | Transform to lowercase            |
+| `NAME=<uppercase>`                | Transform to uppercase            |
+| `SLUG=<slugify>`                  | Slugify (lowercase + dashes)      |
+| `NAME=<trim:->`                   | Trim chars from edges             |
+| `NAME=<replace:/pat/repl/g>`      | Regex replace                     |
 
 Combine with comma: `<required,url>` or `<if:ENABLED,required>`
+
+### Secret Charsets
+
+Control which characters are used in generated secrets:
+
+| Preset    | Characters            |
+| --------- | --------------------- |
+| `alnum`   | `a-zA-Z0-9` (default) |
+| `alpha`   | `a-zA-Z`              |
+| `lower`   | `a-z`                 |
+| `upper`   | `A-Z`                 |
+| `num`     | `0-9`                 |
+| `hex`     | `0-9a-f`              |
+| `HEX`     | `0-9A-F`              |
+| `special` | `!@#$%^&*()-_=+`      |
 
 ### Transform Directives
 

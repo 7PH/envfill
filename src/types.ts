@@ -5,10 +5,11 @@
 /** Validation directives: <required>, <url>, etc. */
 export type DirectiveType = 'required' | 'url' | 'email' | 'port' | 'number' | 'boolean';
 
-/** Auto-generated secret: <secret:32> */
+/** Auto-generated secret: <secret:32> or <secret:32:hex> */
 export interface SecretDirective {
     type: 'secret';
     length: number;
+    charset?: string;
 }
 
 /** Selection from choices: <a|b|*c> */

@@ -46,7 +46,7 @@ describe('CLI E2E Tests', () => {
 
             const apiToken = env.get('API_TOKEN');
             expect(apiToken).toBeDefined();
-            expect(apiToken).toHaveLength(16);
+            expect(apiToken).toMatch(/^[0-9a-f]{16}$/);
 
             // Options should use default (marked with *)
             expect(env.get('NODE_ENV')).toBe('production');
@@ -272,6 +272,19 @@ FEATURE_API_KEY=<if:FEATURE_ENABLED,required>`
             expect(secret1).toBeDefined();
             expect(secret2).toBeDefined();
             expect(secret1).not.toBe(secret2);
+        });
+
+        it('supports charset presets and combinations', () => {
+            writeFileSync(join(ctx.dir, 'charset.template'),
+                `HEX=<secret:16:hex>
+NUM=<secret:6:num>
+COMBO=<secret:12:lower+num>`);
+            const result = ctx.runCli(['-i', 'charset.template', '--defaults', '-q']);
+            expect(result.exitCode).toBe(0);
+            const env = ctx.readEnvFile();
+            expect(env.get('HEX')).toMatch(/^[0-9a-f]{16}$/);
+            expect(env.get('NUM')).toMatch(/^[0-9]{6}$/);
+            expect(env.get('COMBO')).toMatch(/^[a-z0-9]{12}$/);
         });
     });
 
