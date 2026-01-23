@@ -46,6 +46,7 @@ Run `npx envfill` and get prompted for each value.
 | `PORT=<port>`        | Port validation              |
 | `DEBUG=<boolean>`    | Yes/no toggle                |
 | `KEY=<if:VAR>`       | Only prompt if VAR is truthy |
+| `B=${A}_suffix`      | Variable interpolation       |
 | `KEY=<regex:/^pattern$/>`| Custom regex validation  |
 | `KEY=<regex:/^pattern$/i:error>`| Regex with flags and custom error |
 

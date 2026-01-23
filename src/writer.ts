@@ -14,7 +14,10 @@ function escapeValue(value: string): string {
     return value;
 }
 
-export function generateEnvContent(variables: ResolvedVariable[]): string {
+/**
+ * Generate .env file content from resolved variables.
+ */
+export function generate(variables: ResolvedVariable[]): string {
     const lines: string[] = [];
     let currentSection: string | undefined;
     let hasOutputtedAny = false;
@@ -36,35 +39,7 @@ export function generateEnvContent(variables: ResolvedVariable[]): string {
     return lines.join('\n') + '\n';
 }
 
-export function generateEnvContentFromTemplate(
-    templateContent: string,
-    resolvedVariables: ResolvedVariable[]
-): string {
-    const valueMap = new Map<string, string>();
-    for (const v of resolvedVariables) {
-        valueMap.set(v.name, v.value);
-    }
-
-    const lines = templateContent.split('\n');
-    const outputLines: string[] = [];
-    const VARIABLE_REGEX = /^([A-Z_][A-Z0-9_]*)=(.*)$/;
-
-    for (const line of lines) {
-        const match = VARIABLE_REGEX.exec(line.trim());
-
-        const varName = match?.[1];
-        if (varName && valueMap.has(varName)) {
-            const escapedValue = escapeValue(valueMap.get(varName)!);
-            outputLines.push(`${varName}=${escapedValue}`);
-        } else {
-            outputLines.push(line);
-        }
-    }
-
-    return outputLines.join('\n');
-}
-
-export function readExistingEnv(filePath: string): Map<string, string> {
+export function read(filePath: string): Map<string, string> {
     const values = new Map<string, string>();
 
     if (!existsSync(filePath)) {
@@ -106,7 +81,7 @@ export function readExistingEnv(filePath: string): Map<string, string> {
     return values;
 }
 
-export function writeEnvFile(filePath: string, content: string): void {
+export function write(filePath: string, content: string): void {
     try {
         writeFileSync(filePath, content, 'utf-8');
     } catch (error) {

@@ -212,7 +212,12 @@ function parseValue(value: string): ParsedValue {
     };
 }
 
-export function parseTemplate(content: string): ParsedTemplate {
+/**
+ * Parse a .env.template file into a structured template.
+ * @param content - Raw template file content
+ * @returns Parsed template with variables and sections
+ */
+export function parse(content: string): ParsedTemplate {
     const lines = content.split('\n');
     const variables: EnvVariable[] = [];
     const sections: string[] = [];
@@ -286,72 +291,4 @@ export function parseTemplate(content: string): ParsedTemplate {
     }
 
     return { variables, sections };
-}
-
-export function validateTemplate(template: ParsedTemplate): string[] {
-    const errors: string[] = [];
-    const definedVariables = new Map<string, EnvVariable>();
-
-    for (const variable of template.variables) {
-        if (variable.directives.includes('boolean') && variable.directives.length > 1) {
-            errors.push(
-                `Line ${variable.lineNumber}: ${variable.name} - boolean directive cannot be combined with other directives`
-            );
-        }
-
-        if (variable.directives.includes('url') && variable.directives.includes('email')) {
-            errors.push(
-                `Line ${variable.lineNumber}: ${variable.name} - url and email directives cannot be combined`
-            );
-        }
-
-        if (variable.directives.includes('port') && variable.directives.includes('number')) {
-            errors.push(
-                `Line ${variable.lineNumber}: ${variable.name} - port and number directives are redundant`
-            );
-        }
-
-        if (variable.default?.type === 'options' && variable.directives.length > 0) {
-            const nonRequiredDirectives = variable.directives.filter(d => d !== 'required');
-            if (nonRequiredDirectives.length > 0) {
-                errors.push(
-                    `Line ${variable.lineNumber}: ${variable.name} - options cannot be combined with validation directives`
-                );
-            }
-        }
-
-        if (variable.default?.type === 'secret' && variable.directives.length > 0) {
-            errors.push(
-                `Line ${variable.lineNumber}: ${variable.name} - secret cannot be combined with directives`
-            );
-        }
-
-        if (variable.regex) {
-            const conflictingDirectives = variable.directives.filter(
-                d => ['url', 'email', 'port', 'number', 'boolean'].includes(d)
-            );
-            if (conflictingDirectives.length > 0) {
-                errors.push(
-                    `Line ${variable.lineNumber}: ${variable.name} - regex cannot be combined with ${conflictingDirectives.join(', ')} directives`
-                );
-            }
-        }
-
-        if (variable.condition) {
-            const conditionVar = definedVariables.get(variable.condition.variable);
-            if (!conditionVar) {
-                errors.push(
-                    `Line ${variable.lineNumber}: ${variable.name} - condition variable '${variable.condition.variable}' must be defined before this variable`
-                );
-            } else if (!conditionVar.directives.includes('boolean')) {
-                errors.push(
-                    `Line ${variable.lineNumber}: ${variable.name} - condition variable '${variable.condition.variable}' should have <boolean> directive`
-                );
-            }
-        }
-
-        definedVariables.set(variable.name, variable);
-    }
-
-    return errors;
 }
