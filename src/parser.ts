@@ -1,4 +1,4 @@
-import type { EnvVariable, ParsedTemplate, DefaultValue, DirectiveType, ConditionDirective, RegexDirective, Transform, SecretDirective } from './types.js';
+import type { EnvVariable, ParsedTemplate, DefaultValue, DirectiveType, ConditionDirective, RegexDirective, Transform, SecretDirective, TemplateNode, VariableNode } from './types.js';
 
 const SECTION_HEADER_REGEX = /^#\s*---\s*(.+?)\s*---\s*$/;
 const VARIABLE_REGEX = /^([A-Z_][A-Z0-9_]*)=(.*)$/;
@@ -319,86 +319,169 @@ function parseValue(value: string): ParsedValue {
 }
 
 /**
- * Parse a .env.template file into a structured template.
+ * Check if a line defines a variable (VAR=...)
+ */
+function isVariableLine(line: string): boolean {
+    return VARIABLE_REGEX.test(line.trim());
+}
+
+/**
+ * Parse a variable line into an EnvVariable.
+ */
+function parseVariableLine(
+    line: string,
+    description: string | undefined,
+    section: string | undefined,
+    lineNumber: number
+): EnvVariable {
+    const trimmedLine = line.trim();
+    const variableMatch = VARIABLE_REGEX.exec(trimmedLine);
+
+    if (!variableMatch?.[1] || variableMatch[2] === undefined) {
+        throw new Error(`Invalid variable line: ${line}`);
+    }
+
+    const name = variableMatch[1];
+    const rawValue = variableMatch[2];
+    const { default: defaultValue, directives, condition, regex, transforms } = parseValue(rawValue);
+
+    const variable: EnvVariable = {
+        name,
+        lineNumber,
+        directives,
+    };
+
+    if (description) {
+        variable.description = description;
+    }
+
+    if (defaultValue) {
+        variable.default = defaultValue;
+    }
+
+    if (condition) {
+        variable.condition = condition;
+    }
+
+    if (regex) {
+        variable.regex = regex;
+    }
+
+    if (transforms) {
+        variable.transforms = transforms;
+    }
+
+    if (section) {
+        variable.section = section;
+    }
+
+    return variable;
+}
+
+/**
+ * Extract variables from a parsed template.
+ */
+export function getVariables(template: ParsedTemplate): EnvVariable[] {
+    return template.nodes
+        .filter((n): n is VariableNode => n.type === 'variable')
+        .map(n => n.variable);
+}
+
+/**
+ * Parse a .env.template file into a block-based AST.
  * @param content - Raw template file content
- * @returns Parsed template with variables and sections
+ * @returns Parsed template with nodes array
  */
 export function parse(content: string): ParsedTemplate {
+    const nodes: TemplateNode[] = [];
     const lines = content.split('\n');
-    const variables: EnvVariable[] = [];
-    const sections: string[] = [];
 
+    let currentBlock: string[] = [];
+    let blockStartLine = 1;
+    let blankCount = 0;
     let currentSection: string | undefined;
-    let pendingDescription: string[] = [];
 
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const lineNumber = i + 1;
-
-        if (line === undefined) continue;
-
-        const trimmedLine = line.trim();
-
-        if (trimmedLine === '' || trimmedLine === '#') {
-            pendingDescription = [];
-            continue;
-        }
-
-        const sectionMatch = SECTION_HEADER_REGEX.exec(trimmedLine);
-        if (sectionMatch?.[1]) {
-            currentSection = sectionMatch[1];
-            if (!sections.includes(currentSection)) {
-                sections.push(currentSection);
-            }
-            pendingDescription = [];
-            continue;
-        }
-
-        if (trimmedLine.startsWith('#') && !SECTION_HEADER_REGEX.test(trimmedLine)) {
-            pendingDescription.push(trimmedLine.slice(1).trim());
-            continue;
-        }
-
-        const variableMatch = VARIABLE_REGEX.exec(trimmedLine);
-        if (variableMatch?.[1] !== undefined && variableMatch[2] !== undefined) {
-            const name = variableMatch[1];
-            const rawValue = variableMatch[2];
-            const { default: defaultValue, directives, condition, regex, transforms } = parseValue(rawValue);
-
-            const variable: EnvVariable = {
-                name,
-                lineNumber,
-                directives,
-            };
-
-            if (pendingDescription.length > 0) {
-                variable.description = pendingDescription.join('\n');
-            }
-
-            if (defaultValue) {
-                variable.default = defaultValue;
-            }
-
-            if (condition) {
-                variable.condition = condition;
-            }
-
-            if (regex) {
-                variable.regex = regex;
-            }
-
-            if (transforms) {
-                variable.transforms = transforms;
-            }
-
-            if (currentSection) {
-                variable.section = currentSection;
-            }
-
-            variables.push(variable);
-            pendingDescription = [];
+    function flushWhitespace(): void {
+        if (blankCount > 0) {
+            nodes.push({ type: 'whitespace', count: blankCount });
+            blankCount = 0;
         }
     }
 
-    return { variables, sections };
+    function flushBlock(): void {
+        flushWhitespace();
+
+        if (currentBlock.length === 0) {
+            return;
+        }
+
+        // Process block line-by-line to handle consecutive variables
+        let pendingDescription: string[] = [];
+
+        for (let i = 0; i < currentBlock.length; i++) {
+            const line = currentBlock[i]!;
+            const lineNumber = blockStartLine + i;
+            const trimmedLine = line.trim();
+
+            // Check for section header
+            const sectionMatch = SECTION_HEADER_REGEX.exec(trimmedLine);
+            if (sectionMatch?.[1]) {
+                // Flush any pending description as content
+                if (pendingDescription.length > 0) {
+                    nodes.push({ type: 'content', lines: [...pendingDescription] });
+                    pendingDescription = [];
+                }
+
+                currentSection = sectionMatch[1];
+                nodes.push({ type: 'section', name: currentSection, line });
+                continue;
+            }
+
+            // Check for variable line
+            if (isVariableLine(line)) {
+                const description = pendingDescription.length > 0
+                    ? pendingDescription.map(l => l.trim().replace(/^#\s?/, '')).join('\n')
+                    : undefined;
+                const variable = parseVariableLine(line, description, currentSection, lineNumber);
+
+                nodes.push({
+                    type: 'variable',
+                    lines: [...pendingDescription, line],
+                    variable,
+                });
+                pendingDescription = [];
+                continue;
+            }
+
+            // Comment or other content - accumulate as potential description
+            pendingDescription.push(line);
+        }
+
+        // Flush any remaining pending description as content
+        if (pendingDescription.length > 0) {
+            nodes.push({ type: 'content', lines: [...pendingDescription] });
+        }
+
+        currentBlock = [];
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line === undefined) continue;
+
+        if (line.trim() === '') {
+            flushBlock();
+            blankCount++;
+        } else {
+            flushWhitespace();
+            if (currentBlock.length === 0) {
+                blockStartLine = i + 1;
+            }
+            currentBlock.push(line);
+        }
+    }
+
+    flushBlock();
+
+    return { nodes };
 }

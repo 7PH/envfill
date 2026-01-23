@@ -1,5 +1,6 @@
 import * as p from '@clack/prompts';
-import type { EnvVariable, ResolvedVariable, PrompterStats, PrompterResult } from './types.js';
+import type { EnvVariable, ResolvedVariable, PrompterStats, PrompterResult, ParsedTemplate } from './types.js';
+import { getVariables } from './parser.js';
 import { resolve, interpolate } from './resolver.js';
 import { createValidator, normalizeBoolean } from './validator.js';
 import { applyTransforms } from './transformer.js';
@@ -122,9 +123,10 @@ async function promptForVariable(
  * @returns Resolved variables and stats, or null if cancelled
  */
 export async function prompt(
-    variables: EnvVariable[],
+    template: ParsedTemplate,
     options: PrompterOptions
 ): Promise<PrompterResult | null> {
+    const variables = getVariables(template);
     const results: ResolvedVariable[] = [];
     const resolvedValues = new Map<string, string>();
     const stats: PrompterStats = { prompted: 0, defaults: 0, kept: 0, generated: 0, skipped: 0 };

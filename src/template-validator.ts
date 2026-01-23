@@ -1,4 +1,5 @@
 import type { ParsedTemplate, EnvVariable } from './types.js';
+import { getVariables } from './parser.js';
 import { INTERPOLATION_PATTERN } from './resolver.js';
 
 function extractInterpolationRefs(variable: EnvVariable): string[] {
@@ -22,9 +23,10 @@ function extractInterpolationRefs(variable: EnvVariable): string[] {
  */
 export function validate(template: ParsedTemplate): string[] {
     const errors: string[] = [];
-    const definedVariables = new Map<string, typeof template.variables[0]>();
+    const variables = getVariables(template);
+    const definedVariables = new Map<string, EnvVariable>();
 
-    for (const variable of template.variables) {
+    for (const variable of variables) {
         if (variable.directives.includes('boolean') && variable.directives.length > 1) {
             errors.push(
                 `Line ${variable.lineNumber}: ${variable.name} - boolean directive cannot be combined with other directives`

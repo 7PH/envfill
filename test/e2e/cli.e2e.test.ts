@@ -704,4 +704,82 @@ GREETING=Hello from \${HOSTNAME}`
             expect(env.get('GREETING')).toBe(`Hello from ${hostname}`);
         });
     });
+
+    describe('Multi-template support', () => {
+        it('overrides replace base variables in-place', () => {
+            ctx.copyFixture('basic.template'); // has PORT=3000
+            writeFileSync(join(ctx.dir, 'override.template'), 'PORT=8080');
+
+            const result = ctx.runCli(['-i', 'basic.template', '-i', 'override.template', '--defaults', '-q']);
+            expect(result.exitCode).toBe(0);
+            expect(ctx.readEnvFile().get('PORT')).toBe('8080');
+        });
+
+        it('adds new variables from override templates', () => {
+            ctx.copyFixture('basic.template');
+            writeFileSync(join(ctx.dir, 'override.template'), 'NEW_VAR=added');
+
+            const result = ctx.runCli(['-i', 'basic.template', '-i', 'override.template', '--defaults', '-q']);
+            expect(result.exitCode).toBe(0);
+
+            const env = ctx.readEnvFile();
+            expect(env.get('PORT')).toBe('3000'); // From base
+            expect(env.get('NEW_VAR')).toBe('added'); // From override
+        });
+
+        it('supports three or more templates', () => {
+            writeFileSync(join(ctx.dir, 'base.template'), 'VAR1=base\nVAR2=base');
+            writeFileSync(join(ctx.dir, 'mid.template'), 'VAR2=mid\nVAR3=mid');
+            writeFileSync(join(ctx.dir, 'top.template'), 'VAR3=top\nVAR4=top');
+
+            const result = ctx.runCli([
+                '-i', 'base.template',
+                '-i', 'mid.template',
+                '-i', 'top.template',
+                '--defaults', '-q'
+            ]);
+            expect(result.exitCode).toBe(0);
+
+            const env = ctx.readEnvFile();
+            expect(env.get('VAR1')).toBe('base');
+            expect(env.get('VAR2')).toBe('mid');
+            expect(env.get('VAR3')).toBe('top');
+            expect(env.get('VAR4')).toBe('top');
+        });
+
+        it('adds file-based section headers when merging', () => {
+            writeFileSync(join(ctx.dir, 'base.template'), `DB_HOST=localhost`);
+            writeFileSync(join(ctx.dir, 'override.template'), `REDIS_URL=redis://localhost`);
+
+            const result = ctx.runCli(['-i', 'base.template', '-i', 'override.template', '--defaults', '-q']);
+            expect(result.exitCode).toBe(0);
+
+            const env = ctx.readEnvFile();
+            expect(env.get('DB_HOST')).toBe('localhost');
+            expect(env.get('REDIS_URL')).toBe('redis://localhost');
+
+            const content = readFileSync(join(ctx.dir, '.env'), 'utf-8');
+            expect(content).toContain('# --- base.template ---');
+            expect(content).toContain('# --- override.template ---');
+        });
+
+        it('uses .env.template by default when no -i flags provided', () => {
+            writeFileSync(join(ctx.dir, '.env.template'), 'DEFAULT_VAR=works');
+
+            const result = ctx.runCli(['--defaults', '-q']);
+            expect(result.exitCode).toBe(0);
+
+            const env = ctx.readEnvFile();
+            expect(env.get('DEFAULT_VAR')).toBe('works');
+        });
+
+        it('exits with error if any template file is missing', () => {
+            ctx.copyFixture('basic.template');
+
+            const result = ctx.runCli(['-i', 'basic.template', '-i', 'missing.template', '--defaults']);
+            expect(result.exitCode).toBe(1);
+            expect(result.stdout).toContain('not found');
+            expect(result.stdout).toContain('missing.template');
+        });
+    });
 });
