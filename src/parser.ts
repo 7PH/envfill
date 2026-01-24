@@ -1,4 +1,4 @@
-import type { EnvVariable, ParsedTemplate, DefaultValue, DirectiveType, ConditionDirective, RegexDirective, Transform, SecretDirective, TemplateNode, VariableNode } from './types.js';
+import type { EnvVariable, ParsedTemplate, DefaultValue, DirectiveType, ConditionDirective, RegexDirective, IntegerDirective, Transform, SecretDirective, TemplateNode, VariableNode } from './types.js';
 
 const SECTION_HEADER_REGEX = /^#\s*---\s*(.+?)\s*---\s*$/;
 const VARIABLE_REGEX = /^([A-Z_][A-Z0-9_]*)=(.*)$/;
@@ -17,6 +17,7 @@ interface ParsedDirectives {
     directives: DirectiveType[];
     condition?: ConditionDirective;
     regex?: RegexDirective;
+    integer?: IntegerDirective;
     transforms?: Transform[];
 }
 
@@ -117,11 +118,54 @@ function parseTrimTransform(trimStr: string): Transform {
     return { type: 'trim', chars };
 }
 
+function parseIntegerDirective(intStr: string): IntegerDirective {
+    // Format: integer:min:max where min and max are optional
+    // Examples: integer:1:100, integer:0:, integer::100, integer::
+    if (!intStr.startsWith('integer:')) {
+        throw new Error('Invalid integer directive format');
+    }
+
+    const afterPrefix = intStr.slice(8); // after "integer:"
+    const colonIndex = afterPrefix.indexOf(':');
+
+    if (colonIndex === -1) {
+        throw new Error('Invalid integer directive: expected format integer:min:max');
+    }
+
+    const minStr = afterPrefix.slice(0, colonIndex);
+    const maxStr = afterPrefix.slice(colonIndex + 1);
+
+    const result: IntegerDirective = {};
+
+    if (minStr !== '') {
+        const min = parseInt(minStr, 10);
+        if (isNaN(min)) {
+            throw new Error(`Invalid integer directive: min value "${minStr}" is not a valid integer`);
+        }
+        result.min = min;
+    }
+
+    if (maxStr !== '') {
+        const max = parseInt(maxStr, 10);
+        if (isNaN(max)) {
+            throw new Error(`Invalid integer directive: max value "${maxStr}" is not a valid integer`);
+        }
+        result.max = max;
+    }
+
+    if (result.min !== undefined && result.max !== undefined && result.min > result.max) {
+        throw new Error(`Invalid integer directive: min (${result.min}) cannot be greater than max (${result.max})`);
+    }
+
+    return result;
+}
+
 function parseDirectiveString(directiveStr: string): ParsedDirectives {
     const transforms: Transform[] = [];
     const directives: DirectiveType[] = [];
     let condition: ConditionDirective | undefined;
     let regex: RegexDirective | undefined;
+    let integer: IntegerDirective | undefined;
 
     // Parse directives sequentially to preserve transform order
     let i = 0;
@@ -189,6 +233,26 @@ function parseDirectiveString(directiveStr: string): ParsedDirectives {
             continue;
         }
 
+        // Check for integer:min:max
+        if (directiveStr.slice(i).startsWith('integer:')) {
+            const startPos = i;
+            i += 8; // skip "integer:"
+
+            // Find end of min
+            const colonIdx = directiveStr.indexOf(':', i);
+            if (colonIdx === -1) {
+                throw new Error('Invalid integer directive: expected format integer:min:max');
+            }
+            i = colonIdx + 1;
+
+            // Find end of max (next comma or end)
+            const commaIdx = directiveStr.indexOf(',', i);
+            i = commaIdx !== -1 ? commaIdx : directiveStr.length;
+
+            integer = parseIntegerDirective(directiveStr.slice(startPos, i));
+            continue;
+        }
+
         // Find end of current part (next comma)
         const commaIdx = directiveStr.indexOf(',', i);
         const partEnd = commaIdx !== -1 ? commaIdx : directiveStr.length;
@@ -222,6 +286,9 @@ function parseDirectiveString(directiveStr: string): ParsedDirectives {
     if (regex) {
         result.regex = regex;
     }
+    if (integer) {
+        result.integer = integer;
+    }
     if (transforms.length > 0) {
         result.transforms = transforms;
     }
@@ -251,6 +318,7 @@ interface ParsedValue {
     directives: DirectiveType[];
     condition?: ConditionDirective;
     regex?: RegexDirective;
+    integer?: IntegerDirective;
     transforms?: Transform[];
 }
 
@@ -306,6 +374,9 @@ function parseValue(value: string): ParsedValue {
         if (parsed.regex) {
             result.regex = parsed.regex;
         }
+        if (parsed.integer) {
+            result.integer = parsed.integer;
+        }
         if (parsed.transforms) {
             result.transforms = parsed.transforms;
         }
@@ -343,7 +414,7 @@ function parseVariableLine(
 
     const name = variableMatch[1];
     const rawValue = variableMatch[2];
-    const { default: defaultValue, directives, condition, regex, transforms } = parseValue(rawValue);
+    const { default: defaultValue, directives, condition, regex, integer, transforms } = parseValue(rawValue);
 
     const variable: EnvVariable = {
         name,
@@ -365,6 +436,10 @@ function parseVariableLine(
 
     if (regex) {
         variable.regex = regex;
+    }
+
+    if (integer) {
+        variable.integer = integer;
     }
 
     if (transforms) {

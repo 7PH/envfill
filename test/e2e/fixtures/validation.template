@@ -5,3 +5,4 @@ MAX_CONNECTIONS=<number>
 API_KEY=<required>
 VERSION=<regex:/^v\d+\.\d+\.\d+$/>
 ENABLE_FEATURE=<boolean>
+PRIORITY=<integer:1:10>

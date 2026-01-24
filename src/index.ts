@@ -7,6 +7,7 @@ export type {
     DefaultValue,
     ConditionDirective,
     RegexDirective,
+    IntegerDirective,
     ReplaceTransform,
     TrimTransform,
     SimpleTransform,
@@ -32,6 +33,7 @@ export {
     normalizeBoolean,
     validateRequired,
     validateRegex,
+    validateInteger,
     createValidator,
 } from './validator.js';
 export { prompt } from './prompter.js';

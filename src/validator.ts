@@ -1,4 +1,4 @@
-import type { DirectiveType, RegexDirective, ValidationResult } from './types.js';
+import type { EnvVariable, RegexDirective, IntegerDirective, ValidationResult } from './types.js';
 
 export function validateUrl(value: string): ValidationResult {
     try {
@@ -66,12 +66,23 @@ export function validateRegex(value: string, regex: RegexDirective): ValidationR
     return { valid: false, error };
 }
 
-export function createValidator(
-    directives: DirectiveType[],
-    regex?: RegexDirective
-): (value: string) => ValidationResult {
+export function validateInteger(value: string, directive: IntegerDirective): ValidationResult {
+    if (!/^-?\d+$/.test(value)) {
+        return { valid: false, error: 'Please enter a valid integer' };
+    }
+    const num = parseInt(value, 10);
+    if (directive.min !== undefined && num < directive.min) {
+        return { valid: false, error: `Value must be at least ${directive.min}` };
+    }
+    if (directive.max !== undefined && num > directive.max) {
+        return { valid: false, error: `Value must be at most ${directive.max}` };
+    }
+    return { valid: true };
+}
+
+export function createValidator(variable: EnvVariable): (value: string) => ValidationResult {
     return (value: string): ValidationResult => {
-        if (directives.includes('required')) {
+        if (variable.directives.includes('required')) {
             const requiredResult = validateRequired(value);
             if (!requiredResult.valid) {
                 return requiredResult;
@@ -80,36 +91,43 @@ export function createValidator(
             return { valid: true };
         }
 
-        if (directives.includes('url')) {
+        if (variable.directives.includes('url')) {
             const urlResult = validateUrl(value);
             if (!urlResult.valid) {
                 return urlResult;
             }
         }
 
-        if (directives.includes('email')) {
+        if (variable.directives.includes('email')) {
             const emailResult = validateEmail(value);
             if (!emailResult.valid) {
                 return emailResult;
             }
         }
 
-        if (directives.includes('port')) {
+        if (variable.directives.includes('port')) {
             const portResult = validatePort(value);
             if (!portResult.valid) {
                 return portResult;
             }
         }
 
-        if (directives.includes('number')) {
+        if (variable.directives.includes('number')) {
             const numberResult = validateNumber(value);
             if (!numberResult.valid) {
                 return numberResult;
             }
         }
 
-        if (regex) {
-            const regexResult = validateRegex(value, regex);
+        if (variable.integer) {
+            const integerResult = validateInteger(value, variable.integer);
+            if (!integerResult.valid) {
+                return integerResult;
+            }
+        }
+
+        if (variable.regex) {
+            const regexResult = validateRegex(value, variable.regex);
             if (!regexResult.valid) {
                 return regexResult;
             }

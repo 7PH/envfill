@@ -302,6 +302,7 @@ COMBO=<secret:12:lower+num>`);
                     'secret-key-123',       // required (non-empty)
                     'v1.2.3',               // matches regex
                     'y',                    // boolean yes
+                    '5',                    // integer in range
                 ]
             );
 
@@ -315,6 +316,7 @@ COMBO=<secret:12:lower+num>`);
             expect(env.get('API_KEY')).toBe('secret-key-123');
             expect(env.get('VERSION')).toBe('v1.2.3');
             expect(env.get('ENABLE_FEATURE')).toBe('true');
+            expect(env.get('PRIORITY')).toBe('5');
         });
 
         it('validates email addresses correctly', async () => {
@@ -382,6 +384,12 @@ COMBO=<secret:12:lower+num>`);
             const result2 = ctx.runCli(['-i', 'conflict2.template', '--defaults']);
             expect(result2.exitCode).toBe(1);
             expect(result2.stdout).toContain('url and email directives cannot be combined');
+
+            writeFileSync(join(ctx.dir, 'conflict3.template'), 'VAR=<integer:1:100,port>');
+
+            const result3 = ctx.runCli(['-i', 'conflict3.template', '--defaults']);
+            expect(result3.exitCode).toBe(1);
+            expect(result3.stdout).toContain('integer cannot be combined with');
         });
 
         it('rejects invalid regex syntax', () => {
@@ -405,6 +413,20 @@ COMBO=<secret:12:lower+num>`);
             const result3 = ctx.runCli(['-i', 'bad-regex3.template', '--defaults']);
             expect(result3.exitCode).toBe(1);
             expect(result3.stdout).toContain('Invalid regex pattern');
+
+            // Invalid integer min value
+            writeFileSync(join(ctx.dir, 'bad-int.template'), 'VAR=<integer:abc:100>');
+
+            const result4 = ctx.runCli(['-i', 'bad-int.template', '--defaults']);
+            expect(result4.exitCode).toBe(1);
+            expect(result4.stdout).toContain('not a valid integer');
+
+            // Invalid integer range (min > max)
+            writeFileSync(join(ctx.dir, 'bad-int2.template'), 'VAR=<integer:100:50>');
+
+            const result5 = ctx.runCli(['-i', 'bad-int2.template', '--defaults']);
+            expect(result5.exitCode).toBe(1);
+            expect(result5.stdout).toContain('cannot be greater than max');
         });
 
         it('rejects multiple conditions', () => {

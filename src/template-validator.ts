@@ -71,6 +71,22 @@ export function validate(template: ParsedTemplate): string[] {
             }
         }
 
+        if (variable.integer) {
+            const conflictingDirectives = variable.directives.filter(
+                d => ['url', 'email', 'port', 'number', 'boolean'].includes(d)
+            );
+            if (conflictingDirectives.length > 0) {
+                errors.push(
+                    `Line ${variable.lineNumber}: ${variable.name} - integer cannot be combined with ${conflictingDirectives.join(', ')} directives`
+                );
+            }
+            if (variable.regex) {
+                errors.push(
+                    `Line ${variable.lineNumber}: ${variable.name} - integer cannot be combined with regex directive`
+                );
+            }
+        }
+
         if (variable.condition) {
             const conditionVar = definedVariables.get(variable.condition.variable);
             if (!conditionVar) {
