@@ -45,6 +45,12 @@ export interface RegexDirective {
     errorMessage?: string;
 }
 
+/** Integer range validation: <integer:min:max> */
+export interface IntegerDirective {
+    min?: number;  // undefined = no minimum
+    max?: number;  // undefined = no maximum
+}
+
 // =============================================================================
 // Transform types
 // =============================================================================
@@ -78,6 +84,7 @@ export interface EnvVariable {
     directives: DirectiveType[];
     condition?: ConditionDirective;
     regex?: RegexDirective;
+    integer?: IntegerDirective;
     transforms?: Transform[];
     section?: string;
     lineNumber: number;

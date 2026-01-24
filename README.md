@@ -50,6 +50,7 @@ Run `npx envfill` and get prompted for each value.
 | `URL=<url>`                       | URL validation                    |
 | `EMAIL=<email>`                   | Email validation                  |
 | `PORT=<port>`                     | Port validation                   |
+| `COUNT=<integer:0:100>`           | Integer in range (min:max)        |
 | `DEBUG=<boolean>`                 | Yes/no toggle                     |
 | `KEY=<if:VAR>`                    | Only prompt if VAR is truthy      |
 | `B=${A}_suffix`                   | Variable interpolation            |
