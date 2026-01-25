@@ -453,6 +453,7 @@ VAR=<if:FLAG_A,if:FLAG_B>`
                     'hello world',                  // space
                     'pass"word',                    // quote
                     'value with # comment',         // hash
+                    'abc$def',                      // dollar sign
                 ]
             );
 
@@ -463,6 +464,7 @@ VAR=<if:FLAG_A,if:FLAG_B>`
             expect(content).toContain('MESSAGE="hello world"');
             expect(content).toContain('PASSWORD="pass\\"word"');
             expect(content).toContain('DESCRIPTION="value with # comment"');
+            expect(content).toContain('DOLLAR_VAR="abc\\$def"');
         });
     });
 

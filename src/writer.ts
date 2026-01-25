@@ -6,8 +6,11 @@ export function escapeValue(value: string): string {
         return '';
     }
 
-    if (value.includes('\n') || value.includes('"') || value.includes("'") || value.includes(' ') || value.includes('#')) {
-        const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    if (value.includes('\n') || value.includes('"') || value.includes("'") || value.includes(' ') || value.includes('#') || value.includes('$')) {
+        const escaped = value
+            .replace(/\\/g, '\\\\')
+            .replace(/"/g, '\\"')
+            .replace(/\$/g, '\\$');
         return `"${escaped}"`;
     }
 
@@ -95,7 +98,7 @@ export function read(filePath: string): Map<string, string> {
                 value = value.slice(1, -1);
             }
 
-            value = value.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+            value = value.replace(/\\"/g, '"').replace(/\\\$/g, '$').replace(/\\\\/g, '\\');
 
             values.set(name, value);
         }
